@@ -1,0 +1,37 @@
+## Interface: 120100, 120105
+## Title: Guildhall
+## Notes: Your guild's crafting directory - who can make what, items guildies have, wanted posts and craft requests, synced between guildies.
+## Author: vebjorn
+## Version: 0.2.0
+## SavedVariables: GuildhallDB
+## IconTexture: Interface\Icons\INV_Misc_Note_02
+## AddonCompartmentFunc: Guildhall_OnAddonCompartmentClick
+## AddonCompartmentFuncOnEnter: Guildhall_OnAddonCompartmentEnter
+## AddonCompartmentFuncOnLeave: Guildhall_OnAddonCompartmentLeave
+## X-Category: Guild
+## X-Website: https://github.com/vBaustad/Guildhall
+## X-License: MIT
+
+Libs\LibStub\LibStub.lua
+Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
+Libs\AceComm-3.0\ChatThrottleLib.lua
+Libs\AceComm-3.0\AceComm-3.0.lua
+Libs\LibForever-1.0\LibForever-1.0.lua
+Libs\LibForever-1.0\Launcher.lua
+
+Core\Core.lua
+Data\Recipes.lua
+Core\Codec.lua
+Core\Scan.lua
+Core\Listings.lua
+Core\Sync.lua
+Core\Orders.lua
+Core\Index.lua
+
+UI\Widgets.lua
+UI\Window.lua
+UI\Browse.lua
+UI\Mine.lua
+UI\Requests.lua
+UI\Minimap.lua
+UI\Options.lua
