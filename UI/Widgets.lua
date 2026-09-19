@@ -20,6 +20,11 @@ function U.Window(name, parent, w, h, title)
     bg:SetPoint("BOTTOMRIGHT", -3, 3)
     bg:SetAtlas("heavybronze-frame-background")
     f.Bg:Hide()
+    -- The template's X calls HideUIPanel, which does nothing in combat from addon code. Hide directly
+    -- (LibForever's RegisterWindow/RegisterPopup do the same; this covers any window they don't).
+    if f.ClosePanelButton then
+        f.ClosePanelButton:SetScript("OnClick", function() f:Hide() end)
+    end
     if name then tinsert(UISpecialFrames, name) end
     return f
 end
@@ -80,9 +85,11 @@ end
 function U.Button(parent, text, w, h)
     local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
     b:SetSize(w or 80, h or 20)
+    -- Font per state: setting only the current font string loses the text once the button is disabled.
+    b:SetNormalFontObject("GameFontNormalSmall")
+    b:SetHighlightFontObject("GameFontHighlightSmall")
+    b:SetDisabledFontObject("GameFontDisableSmall")
     b:SetText(text)
-    local fs = b:GetFontString()
-    if fs then fs:SetFontObject("GameFontNormalSmall") end
     return b
 end
 
@@ -128,8 +135,10 @@ function U.Checkbox(parent, label)
     return cb
 end
 
--- Row of choices styled like the Options panel's category list: the selected one gets the
--- list's highlight bar. onSelect(value). Returns control with :Select(value), :SetLabel(value, text).
+-- Row of choices styled like the Options panel's category list. Only the selected one is marked: the
+-- list's highlight bar, gold text and a gold underline; the others have plain text (grey when dimmed).
+-- items = { { value, label, tip } }; onSelect(value). Returns a control with :Select(value, fire),
+-- :SetLabel(value, text) and :SetDim(value, dim).
 function U.Segmented(parent, items, width, onSelect)
     local ctl = CreateFrame("Frame", nil, parent)
     local segW = math.floor(width / #items)
@@ -145,26 +154,55 @@ function U.Segmented(parent, items, width, onSelect)
         local hl = b:CreateTexture(nil, "HIGHLIGHT")
         hl:SetAllPoints()
         hl:SetAtlas("Options_List_Hover")
-        local fs = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        hl:SetAlpha(0.5)
+        b.line = b:CreateTexture(nil, "ARTWORK")
+        b.line:SetColorTexture(1, 0.82, 0, 0.9)
+        b.line:SetHeight(2)
+        b.line:SetPoint("BOTTOMLEFT", 6, 0)
+        b.line:SetPoint("BOTTOMRIGHT", -6, 0)
+        local fs = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         fs:SetPoint("CENTER")
         fs:SetText(item.label)
         b.fs = fs
         b.value = item.value
         b:SetScript("OnClick", function() ctl:Select(item.value, true) end)
+        if item.tip then
+            b:SetScript("OnEnter", function(self)
+                GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+                GameTooltip:AddLine(item.tip, 1, 1, 1, true)
+                GameTooltip:Show()
+            end)
+            b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        end
         ctl.buttons[i] = b
+    end
+    local function Paint(b, on)
+        b.bg:SetShown(on)
+        b.line:SetShown(on)
+        if on then
+            b.fs:SetTextColor(1, 0.82, 0)
+        elseif b.dim then
+            b.fs:SetTextColor(0.5, 0.5, 0.5)
+        else
+            b.fs:SetTextColor(0.85, 0.82, 0.76)
+        end
     end
     function ctl:Select(value, fire)
         self.value = value
-        for _, b in ipairs(self.buttons) do
-            local on = b.value == value
-            b.bg:SetShown(on)
-            b.fs:SetFontObject(on and "GameFontHighlightSmall" or "GameFontNormalSmall")
-        end
+        for _, b in ipairs(self.buttons) do Paint(b, b.value == value) end
         if fire and onSelect then onSelect(value) end
     end
     function ctl:SetLabel(value, text)
         for _, b in ipairs(self.buttons) do
             if b.value == value then b.fs:SetText(text) end
+        end
+    end
+    function ctl:SetDim(value, dim)
+        for _, b in ipairs(self.buttons) do
+            if b.value == value then
+                b.dim = dim or nil
+                Paint(b, b.value == self.value)
+            end
         end
     end
     ctl:Select(items[1].value)

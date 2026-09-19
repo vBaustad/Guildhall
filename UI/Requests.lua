@@ -143,8 +143,8 @@ local function Build(f)
                     SetButton(row.b2, "Cancel", function() O.Cancel(o.oid) end)
                 end
             end
-            SetButton(row.b1, "Whisper", whisper)
-            row.b1:SetShown(true)
+            -- Label first, then enable state, so a disabled button still reads.
+            SetButton(row.b1, whisper and "Whisper" or "Offline", whisper)
             row.b1:SetEnabled(whisper ~= nil)
         end)
     f.list:SetPoint("TOPLEFT", 4, -4)

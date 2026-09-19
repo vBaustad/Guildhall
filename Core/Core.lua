@@ -3,11 +3,9 @@
 local ADDON, GH = ...
 _G.Guildhall = GH
 
-local getMeta = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
-GH.VERSION = (getMeta and getMeta(ADDON, "Version")) or "0.0.0"
+GH.VERSION = C_AddOns.GetAddOnMetadata(ADDON, "Version") or "0.0.0"
 
 GH.CREAM = "ffebdec2"
-GH.GOLD = "ffe6b34d"
 GH.GRAY = "ff8a8a8a"
 
 -- Recognised professions (enUS names, as GetSkillLineInfo / GetTradeSkillLine return them).
@@ -146,8 +144,8 @@ end
 -- ---------------------------------------------------------------------------
 local SETTING_DEFAULTS = {
     tooltip = true,          -- guild crafters / listings on item tooltips
-    minimapAngle = 200,
-    hideMinimap = false,
+    -- The minimap button lives in settings.minimap (LibDBIcon's format). Old minimapAngle/hideMinimap
+    -- values are migrated once by UI/Minimap.lua, so they have no defaults here.
     notifyRequests = true,   -- chat + sound when someone asks you to craft
     notifyWanted = true,     -- chat line when a guildie wants something you can make
     listingDays = 14,        -- listings expire after this many days
@@ -240,15 +238,6 @@ function GH.GuildDB()
     return g
 end
 
-function GH.RequestRoster()
-    if not IsInGuild() then return end
-    if C_GuildInfo and C_GuildInfo.GuildRoster then
-        C_GuildInfo.GuildRoster()
-    elseif GuildRoster then
-        GuildRoster()
-    end
-end
-
 function GH.IsOnline(full)
     if full == GH.Me() then return true end
     local r = GH.roster[full]
@@ -257,13 +246,6 @@ end
 
 function GH.IsGuildie(full)
     return GH.roster[full] ~= nil
-end
-
--- Does the roster include offline members? Only then is "missing from the roster" meaningful.
--- (The modern client always returns the full roster; older clients honour the "show offline" toggle.)
-local function RosterHasOffline()
-    if GetGuildRosterShowOffline then return GetGuildRosterShowOffline() and true or false end
-    return true
 end
 
 -- Chat messaging lockdown (a Midnight-era restriction that is active in Forever): addon chat
@@ -278,21 +260,29 @@ local function RebuildRoster()
     local old = GH.roster
     local new = {}
     local cameOnline = {}
+    local membersChanged = false
     for i = 1, total do
         local name, _, rankIndex, level, _, zone, _, _, online, _, classFile = GetGuildRosterInfo(i)
         if name then
             local full = GH.FullName(name)
             new[full] = { online = online and true or false, class = classFile, level = level, rankIndex = rankIndex, zone = zone }
+            if not old[full] then membersChanged = true end
             if online and old[full] and not old[full].online then
                 cameOnline[#cameOnline + 1] = full
             end
         end
     end
+    if not membersChanged then
+        for full in pairs(old) do
+            if not new[full] then membersChanged = true break end
+        end
+    end
     GH.roster = new
     local first = not GH.rosterReady
     GH.rosterReady = true
-    GH.rosterComplete = RosterHasOffline()
-    GH.Fire("ROSTER", first)
+    GH.rosterComplete = true  -- the modern client always lists offline members too
+    -- ROSTER(first, membersChanged): membersChanged is false when only online flags or zones moved.
+    GH.Fire("ROSTER", first, membersChanged)
     for _, full in ipairs(cameOnline) do GH.Fire("MEMBER_ONLINE", full) end
 end
 
@@ -300,8 +290,10 @@ GH.On("GUILD_ROSTER_UPDATE", function()
     GH.Coalesce("roster", 1, RebuildRoster)
 end)
 
+-- We never ask for the roster: C_GuildInfo.GuildRoster() pops the "blocked" dialog on Forever. The
+-- server pushes GUILD_ROSTER_UPDATE on its own, and whatever the client already holds is read here.
 GH.On("PLAYER_GUILD_UPDATE", function()
-    GH.RequestRoster()
+    GH.Coalesce("roster", 1, RebuildRoster)
     GH.Fire("GUILD_CHANGED")
 end)
 
@@ -315,9 +307,18 @@ GH.On("PLAYER_LOGIN", function()
     GH.DB()
     GH.MyData()
     GH.Fire("LOGIN")
-    GH.RequestRoster()
-    -- Keep the online flags fresh; the server only pushes some roster changes.
-    C_Timer.NewTicker(60, GH.RequestRoster)
+    -- In case the roster arrived before we were listening: read what the client holds.
+    -- We never request it (that's blocked), so until the client has some roster data, look again every
+    -- few seconds: it arrives with the server's GUILD_ROSTER_UPDATE or when the guild UI loads it.
+    local ticker
+    ticker = C_Timer.NewTicker(5, function()
+        if GH.rosterReady or not IsInGuild() then
+            ticker:Cancel()
+            return
+        end
+        RebuildRoster()
+    end)
+    C_Timer.After(2, function() if not GH.rosterReady then RebuildRoster() end end)
 end)
 
 -- ---------------------------------------------------------------------------
@@ -341,7 +342,14 @@ SlashCmdList.GUILDHALL = function(input)
     elseif cmd == "status" then
         if GH.PrintStatus then GH.PrintStatus() end
     elseif cmd == "sync" then
-        if GH.Sync and GH.Sync.Hello then GH.Sync.Hello(true) end
+        -- A forced hello asks every online guildie for data, so allow it once a minute.
+        local now = GetTime()
+        if GH.lastForcedSync and now - GH.lastForcedSync < 60 then
+            GH.msg("sync was just requested - try again in %d s.", 60 - (now - GH.lastForcedSync))
+        elseif GH.Sync and GH.Sync.Hello then
+            GH.lastForcedSync = now
+            GH.Sync.Hello(true)
+        end
     elseif cmd == "debug" then
         GH.debug = not GH.debug
         GH.msg("debug %s", GH.debug and "on" or "off")

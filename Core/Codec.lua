@@ -72,7 +72,6 @@ function C.WireToKey(w)
     return C.From36(w)
 end
 
-function C.IsSpellKey(key) return type(key) == "string" end
 function C.SpellId(key) return tonumber(key:match("^s(%d+)$")) end
 
 function C.KeyName(key)

@@ -92,10 +92,10 @@ local function RefreshProfessions()
             row.name:SetText(("|c%s%s|r  |cffffffff%d|r|cff8a8a8a/%d|r"):format(GH.CREAM, name, p.rank or 0, p.max or 0))
             if gathering[id] then
                 row.status:SetText("|cff8a8a8agathering - skill shared|r")
-            elseif p.recipes then
-                row.status:SetText(("|cff60d060%d recipes shared|r |cff8a8a8a- scanned %s%s|r"):format(
-                    GH.Scan.CountSet(p.recipes), GH.Ago(p.scanned), p.partial and ", merged with earlier scans" or ""))
+            elseif GH.Scan.HasStaticRecipes(id) or p.recipes then
+                row.status:SetText(("|cff60d060%d recipes shared|r"):format(GH.Scan.CountSet(p.recipes)))
             else
+                -- No built-in data for this profession: only its window can tell which recipes you know.
                 row.status:SetText("|cffffb040open your " .. name .. " window once to share recipes|r")
             end
             row:Show()
@@ -165,7 +165,7 @@ local function Build(f)
     hint:SetPoint("BOTTOMLEFT", 10, 10)
     hint:SetPoint("RIGHT", -10, 0)
     hint:SetJustifyH("LEFT")
-    hint:SetText("Recipes are shared automatically each time you open a profession window. Expand all categories in the window so every recipe is seen.")
+    hint:SetText("Your professions and recipes are shared with the guild automatically, and updated whenever you learn something new.")
     f.guildNote = U.Text(left, "GameFontHighlightSmall")
     f.guildNote:SetPoint("BOTTOMLEFT", hint, "TOPLEFT", 0, 6)
 

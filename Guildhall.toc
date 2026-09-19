@@ -1,11 +1,11 @@
-## Interface: 120100, 120105
+## Interface: 16001
 ## Title: Guildhall
 ## Category: YippYapp
 ## Notes: Your guild's crafting directory - who can make what, items guildies have, wanted posts and craft requests, synced between guildies. Part of YippYapp - addons for WoW: Forever that work even better together.
 ## Author: vebjorn
-## Version: 0.2.0
+## Version: 0.2.0-beta1
 ## SavedVariables: GuildhallDB
-## IconTexture: Interface\Icons\INV_Misc_Note_02
+## IconTexture: Interface\AddOns\Guildhall\Media\icon
 ## AddonCompartmentFunc: Guildhall_OnAddonCompartmentClick
 ## AddonCompartmentFuncOnEnter: Guildhall_OnAddonCompartmentEnter
 ## AddonCompartmentFuncOnLeave: Guildhall_OnAddonCompartmentLeave
@@ -15,10 +15,16 @@
 
 Libs\LibStub\LibStub.lua
 Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
+Libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
+Libs\LibDBIcon-1.0\lib.xml
 Libs\AceComm-3.0\ChatThrottleLib.lua
 Libs\AceComm-3.0\AceComm-3.0.lua
 Libs\LibForever-1.0\LibForever-1.0.lua
 Libs\LibForever-1.0\Launcher.lua
+Libs\LibForever-1.0\Windows.lua
+Libs\LibForever-1.0\Minimap.lua
+Libs\LibForever-1.0\Welcome.lua
+Libs\LibForever-1.0\Settings.lua
 
 Core\Core.lua
 Data\Recipes.lua
@@ -36,3 +42,4 @@ UI\Mine.lua
 UI\Requests.lua
 UI\Minimap.lua
 UI\Options.lua
+UI\Welcome.lua

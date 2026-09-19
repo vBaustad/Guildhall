@@ -1,5 +1,7 @@
 -- Guildhall - scanning (modern client): profession ranks and known recipes.
--- Runs silently whenever a profession window opens; nobody has to enter anything by hand.
+-- Runs silently at login and whenever a recipe is learned, without opening any window: every recipe in
+-- the static data is checked with IsPlayerSpell. Opening a profession window adds anything the static
+-- data doesn't know. Nobody has to enter anything by hand.
 -- Professions are keyed by skill line ID (e.g. 164 Blacksmithing), recipes by recipe spell ID.
 local ADDON, GH = ...
 local C = GH.Codec
@@ -111,13 +113,43 @@ local function ViewingOwnProfession()
     return true
 end
 
-local function ScanOpenProfession()
+-- The open profession window, read on TRADE_SKILL_SHOW and kept until TRADE_SKILL_CLOSE.
+-- GetChildProfessionInfo is the call Blizzard's own profession UI makes first, but on Forever (no
+-- expansion tiers) it can return professionID 0; Blizzard then falls back to GetBaseProfessionInfo,
+-- which pops the "blocked" dialog for addons. Blizzard's window keeps the info it settled on in
+-- ProfessionsFrame.professionInfo, so use that as the fallback.
+local openInfo
+local ScanOpenProfession   -- defined below
+
+local function Valid(info) return type(info) == "table" and (info.professionID or 0) ~= 0 and info or nil end
+
+local function ReadOpenInfo()
+    local T = C_TradeSkillUI
+    local info = Valid(T and T.GetChildProfessionInfo and T.GetChildProfessionInfo())
+    if not info and ProfessionsFrame then info = Valid(ProfessionsFrame.professionInfo) end
+    return info
+end
+
+-- The window may not have its info yet right at TRADE_SKILL_SHOW: try again for a moment.
+local function CaptureOpenInfo(tries)
+    openInfo = ReadOpenInfo()
+    if openInfo then
+        GH.Debounce("scanTrade", 1, ScanOpenProfession)
+    elseif tries > 0 then
+        C_Timer.After(0.3, function() CaptureOpenInfo(tries - 1) end)
+    else
+        GH.dbg("couldn't tell which profession window is open")
+    end
+end
+
+function ScanOpenProfession()
     if not ViewingOwnProfession() then return end
     local d = GH.MyData()
     if not d then return end
     local T = C_TradeSkillUI
-    local info = T.GetBaseProfessionInfo()
-    if not info or not info.professionID or info.professionID == 0 then return end
+    local info = openInfo or ReadOpenInfo()
+    if not info then return end
+    openInfo = info
     local profID = info.professionID
     if not PROFESSION_LINES[profID] and info.parentProfessionID and PROFESSION_LINES[info.parentProfessionID] then
         profID = info.parentProfessionID
@@ -183,15 +215,92 @@ local function ScanOpenProfession()
     end
 end
 
--- The current character's known recipe spell IDs across all professions.
-function S.MyRecipes()
-    local d = GH.MyData()
-    local set = {}
-    if not d then return set end
-    for _, p in pairs(d.profs) do
-        if p.recipes then for k in pairs(p.recipes) do set[k] = true end end
+-- ---------------------------------------------------------------------------
+-- Known recipes without opening a window
+-- ---------------------------------------------------------------------------
+-- IsPlayerSpell / C_SpellBook.IsSpellKnown answer for profession recipes (verified in the Forever beta);
+-- the old IsSpellKnown does not.
+local function Knows(spellID)
+    if IsPlayerSpell then return IsPlayerSpell(spellID) end
+    return C_SpellBook and C_SpellBook.IsSpellKnown and C_SpellBook.IsSpellKnown(spellID) or false
+end
+
+local byProfession   -- [skillLineID] = { recipe spell IDs from the static data }
+local function StaticRecipes(profID)
+    if not byProfession then
+        byProfession = {}
+        for spellID, raw in pairs(GH.Data and GH.Data.recipes or {}) do
+            local prof = tonumber(raw:match("^(%d+)|"))
+            if prof then
+                local list = byProfession[prof]
+                if not list then list = {}; byProfession[prof] = list end
+                list[#list + 1] = spellID
+            end
+        end
     end
-    return set
+    return byProfession[profID]
+end
+
+-- Check one profession; merge with what window scans found (recipes the static data doesn't list).
+local function ScanKnownProfession(d, profID)
+    local list = StaticRecipes(profID)
+    local p = d.profs[profID]
+    if not list or not p then return false end
+    local recipes = {}
+    local static = {}
+    for _, spellID in ipairs(list) do
+        static[spellID] = true
+        if Knows(spellID) then recipes[spellID] = true end
+    end
+    for spellID in pairs(p.recipes or {}) do
+        if not static[spellID] then recipes[spellID] = true end
+    end
+    local changed = not SameSet(p.recipes, recipes)
+    p.recipes = recipes
+    p.scanned = GH.Now()
+    p.partial = nil
+    return changed
+end
+
+-- All crafting professions, one per frame so a long list never causes a hitch.
+local scanning
+function S.ScanKnown()
+    if scanning then return end
+    local d = GH.MyData()
+    if not d then return end
+    local queue = {}
+    for id in pairs(d.profs) do
+        if not GATHERING_LINES[id] then queue[#queue + 1] = id end
+    end
+    scanning = true
+    local changed = false
+    local function step()
+        local id = table.remove(queue)
+        if id then
+            if ScanKnownProfession(d, id) then changed = true end
+            C_Timer.After(0, step)
+            return
+        end
+        scanning = nil
+        GH.dbg("recipe check done%s", changed and " (changed)" or "")
+        -- "autoscan" publishes on Sync's slow schedule, so logging in doesn't flood the guild channel.
+        if changed then GH.BumpRev("autoscan") else GH.Fire("MY_SCANNED") end
+    end
+    step()
+end
+
+-- Is there static recipe data for this profession? Without it only a window scan finds recipes.
+function S.HasStaticRecipes(profID)
+    return StaticRecipes(profID) ~= nil
+end
+
+-- Has this character shared any recipes at all?
+function GH.HasSharedRecipes()
+    local d = GH.MyData()
+    for _, p in pairs(d and d.profs or {}) do
+        if p.recipes and next(p.recipes) then return true end
+    end
+    return false
 end
 
 -- Which of my professions makes this item/enchant key: (profession name, rank) or nil.
@@ -207,9 +316,26 @@ function S.MyProfessionFor(key)
     end
 end
 
-GH.On("TRADE_SKILL_SHOW", function() GH.Debounce("scanTrade", 1, ScanOpenProfession) end)
+GH.On("TRADE_SKILL_SHOW", function() CaptureOpenInfo(10) end)
 GH.On("TRADE_SKILL_LIST_UPDATE", function() GH.Debounce("scanTrade", 1.5, ScanOpenProfession) end)
-GH.On("NEW_RECIPE_LEARNED", function() GH.Debounce("scanTrade", 1.5, ScanOpenProfession) end)
-GH.On("SKILL_LINES_CHANGED", function() GH.Debounce("scanRanks", 2, S.ScanRanks) end)
-GH.On("TRADE_SKILL_CLOSE", function() GH.Debounce("scanRanks", 1, S.ScanRanks) end)
-GH.Listen("LOGIN", function() C_Timer.After(3, S.ScanRanks) end)
+GH.On("NEW_RECIPE_LEARNED", function()
+    GH.Debounce("scanTrade", 1.5, ScanOpenProfession)
+    GH.Debounce("scanKnown", 2, S.ScanKnown)
+end)
+GH.On("SKILL_LINES_CHANGED", function()
+    GH.Debounce("scanRanks", 2, S.ScanRanks)
+    GH.Debounce("scanKnown", 3, S.ScanKnown)   -- after the ranks, so a new profession is in d.profs
+end)
+if not C_EventUtils or not C_EventUtils.IsEventValid or C_EventUtils.IsEventValid("LEARNED_SPELL_IN_SKILL_LINE") then
+    GH.On("LEARNED_SPELL_IN_SKILL_LINE", function() GH.Debounce("scanKnown", 2, S.ScanKnown) end)
+end
+GH.On("TRADE_SKILL_CLOSE", function()
+    openInfo = nil
+    GH.Debounce("scanRanks", 1, S.ScanRanks)
+end)
+GH.Listen("LOGIN", function()
+    C_Timer.After(3, function()
+        S.ScanRanks()
+        S.ScanKnown()
+    end)
+end)

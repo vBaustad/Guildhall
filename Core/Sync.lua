@@ -310,9 +310,10 @@ end)
 
 GH.Listen("MY_DATA_CHANGED", function(reason)
     if not helloSent then return end
-    if reason == "rank" then
-        -- Skill-ups come in bursts while leveling; share them at most every two minutes.
-        GH.Coalesce("publishRank", 120, Sync.Publish)
+    if reason == "rank" or reason == "bags" or reason == "autoscan" then
+        -- Skill-ups and bag-driven listing updates come in bursts; share them at most every two
+        -- minutes. Changes the player makes by hand still go out after 10 seconds.
+        GH.Coalesce("publishSlow", 120, Sync.Publish)
     else
         GH.Debounce("publish", 10, Sync.Publish)
     end

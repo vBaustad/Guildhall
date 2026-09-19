@@ -154,7 +154,8 @@ function L.Check()
             changed = true
         end
     end
-    if changed then GH.BumpRev("listings") end
+    -- "bags": automatic bag/expiry housekeeping, published on the slow schedule (see Sync).
+    if changed then GH.BumpRev("bags") end
 end
 
 -- A guildie posted a wanted item I can craft: say so once.

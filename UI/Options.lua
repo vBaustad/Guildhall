@@ -1,72 +1,80 @@
 -- Guildhall - settings. The same page is built twice: as the Settings tab in Guildhall's own
--- window, and in Blizzard's Options -> AddOns -> Guildhall.
+-- window, and in Blizzard's Options -> AddOns -> Guildhall. Minimap and launcher buttons are not
+-- here: they live on the shared YippYapp page (LibForever), linked at the bottom.
 local ADDON, GH = ...
 local U = GH.UI
+local LIB = LibStub and LibStub("LibForever-1.0", true)
 
+local SECTION_GAP = 8   -- extra air above each heading
 
-local function Build(f)
+local function Build(f, extraButton)
     local checks = {}
     f.checks = checks
-    local head = U.Heading(f, "Guildhall")
-    head:SetFontObject("GameFontNormalLarge")
-    head:SetPoint("TOPLEFT", 8, -6)
-    local sub = f:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    sub:SetPoint("TOPLEFT", head, "BOTTOMLEFT", 0, -8)
-    sub:SetWidth(600)
-    sub:SetJustifyH("LEFT")
-    sub:SetText("Your guild's crafting directory: who can make what, items guildies have, wanted posts and craft requests.")
+    -- Everything stacks under the previous element; x is the left edge within the page.
+    local last, lastX
+    local function place(region, gap, x)
+        region:SetPoint("TOPLEFT", last, "BOTTOMLEFT", x - lastX, -gap)
+        last, lastX = region, x
+    end
 
-    local y = -52
-    local function checkbox(label, get, set)
+    -- Title, version and what Guildhall does.
+    local title = f:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+    title:SetPoint("TOPLEFT", 8, -6)
+    title:SetText("Guildhall")
+    local version = f:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    version:SetPoint("BOTTOMLEFT", title, "BOTTOMRIGHT", 8, 1)
+    version:SetText("v" .. GH.VERSION)
+    local sub = f:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    sub:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -6)
+    sub:SetPoint("RIGHT", f, "RIGHT", -8, 0)
+    sub:SetJustifyH("LEFT")
+    sub:SetText("Your guild's crafting directory: who can make what, items guildies have, wanted posts and "
+        .. "craft requests. Open it with |cffffd100/gh|r.")
+    last, lastX = sub, 8
+
+    local function heading(text)
+        place(U.Heading(f, text), SECTION_GAP + 6, 8)
+    end
+
+    -- Checkbox with its explanation in the tooltip.
+    local function checkbox(label, tip, key)
         local cb = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
         cb:SetSize(26, 26)
-        cb:SetPoint("TOPLEFT", 8, y)
+        local follows = last.isCheck
+        place(cb, follows and 2 or 6, 4)
+        cb.isCheck = true
         local l = f:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
         l:SetPoint("LEFT", cb, "RIGHT", 4, 0)
         l:SetText(label)
-        cb.get = get
-        cb:SetScript("OnClick", function(self) set(self:GetChecked() and true or false) end)
-        checks[#checks + 1] = cb
-        y = y - 28
-        return cb
-    end
-    local function setting(key)
-        return function() return GH.Settings()[key] end, function(v) GH.Settings()[key] = v end
-    end
-
-    local h1 = U.Heading(f, "Tooltips & notifications")
-    h1:SetPoint("TOPLEFT", 8, y)
-    y = y - 24
-    checkbox("Show guild crafters and listings on item tooltips", setting("tooltip"))
-    checkbox("Notify me when a guildie asks me to craft something", setting("notifyRequests"))
-    checkbox("Tell me when a guildie wants something I can craft", setting("notifyWanted"))
-
-    y = y - 8
-    local h3 = U.Heading(f, "Minimap & launcher")
-    h3:SetPoint("TOPLEFT", 8, y - 102)
-    local listingsY = y
-    y = y - 126
-    checkbox("Show the minimap button",
-        function() return not GH.Settings().hideMinimap end,
-        function(v)
-            GH.Settings().hideMinimap = not v
-            GH.UpdateMinimap()
+        cb.get = function() return GH.Settings()[key] end
+        cb:SetScript("OnClick", function(self) GH.Settings()[key] = self:GetChecked() and true or false end)
+        cb:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:AddLine(label, 1, 0.82, 0.3)
+            GameTooltip:AddLine(tip, 1, 1, 1, true)
+            GameTooltip:Show()
         end)
-    local LIB = LibStub and LibStub("LibForever-1.0", true)
-    if LIB and LIB.LauncherOptions then
-        local launcher = LIB.LauncherOptions(f, "Guildhall")
-        launcher:SetPoint("TOPLEFT", 8, y)
+        cb:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        checks[#checks + 1] = cb
     end
 
-    y = listingsY
-    local h2 = U.Heading(f, "Listings")
-    h2:SetPoint("TOPLEFT", 8, y)
-    y = y - 50
+    -- Most-used first: what you see on items, then what pings you, then your own listings.
+    heading("Item tooltips")
+    checkbox("Show guild crafters and listings on item tooltips",
+        "Hover any item to see which guildies can craft it, who has one to spare and who wants one.", "tooltip")
 
+    heading("Notifications")
+    checkbox("Notify me when a guildie asks me to craft something",
+        "A chat line and a sound when a craft request arrives, including requests sent while you were offline.",
+        "notifyRequests")
+    checkbox("Tell me when a guildie wants something I can craft",
+        "A chat line when someone posts a wanted item that one of your recipes makes.", "notifyWanted")
+
+    heading("Your listings")
     -- A template-free slider: OptionsSliderTemplate is deprecated on the modern client.
     local s = CreateFrame("Slider", nil, f, "BackdropTemplate")
     s:SetSize(260, 16)
-    s:SetPoint("TOPLEFT", 14, y)
+    place(s, 30, 14)
     s:SetOrientation("HORIZONTAL")
     s:SetBackdrop({ bgFile = "Interface\\Buttons\\UI-SliderBar-Background", edgeFile = "Interface\\Buttons\\UI-SliderBar-Border",
         tile = true, tileSize = 8, edgeSize = 8, insets = { left = 3, right = 3, top = 6, bottom = 6 } })
@@ -74,28 +82,51 @@ local function Build(f)
     s:SetMinMaxValues(3, 30)
     s:SetValueStep(1)
     s:SetObeyStepOnDrag(true)
-    local title = f:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    title:SetPoint("BOTTOMLEFT", s, "TOPLEFT", 0, 6)
+    local label = f:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    label:SetPoint("BOTTOMLEFT", s, "TOPLEFT", 0, 6)
     local low = f:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     low:SetPoint("TOPLEFT", s, "BOTTOMLEFT", 0, -2)
     low:SetText("3 days")
     local high = f:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     high:SetPoint("TOPRIGHT", s, "BOTTOMRIGHT", 0, -2)
     high:SetText("30 days")
-    local function label(v) title:SetText(("Listings expire after %d days"):format(v)) end
+    local hint = f:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    hint:SetPoint("LEFT", s, "RIGHT", 16, 0)
+    hint:SetPoint("RIGHT", f, "RIGHT", -8, 0)
+    hint:SetJustifyH("LEFT")
+    hint:SetText("Offers you post under \"Guildies have it\" disappear after this long. They also go away "
+        .. "once the item leaves your bags.")
+    local function setLabel(v) label:SetText(("Listings expire after %d days"):format(v)) end
     s:SetScript("OnValueChanged", function(_, v)
         v = math.floor(v + 0.5)
         GH.Settings().listingDays = v
-        label(v)
+        setLabel(v)
     end)
-    f.slider, f.sliderLabel = s, label
+    f.slider, f.sliderLabel = s, setLabel
+    last = low  -- same left edge as the slider
 
-    local hint = f:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-    hint:SetPoint("BOTTOMLEFT", 8, 6)
-    hint:SetPoint("RIGHT", f, "RIGHT", -150, 0)
-    hint:SetJustifyH("LEFT")
-    hint:SetText("|cffffd100/gh|r opens Guildhall.  |cffffd100/gh search <item>|r searches.  |cffffd100/gh status|r shows sync status.\n"
-        .. "Everything is shared only with your guild, over the guild addon channel.")
+    -- Bottom: the shared YippYapp settings link, welcome, and the family footer.
+    if LIB and LIB.LauncherOptions then
+        place(LIB.LauncherOptions(f, "Guildhall"), SECTION_GAP + 14, 8)
+    end
+    local buttons = {}
+    if LIB and LIB.OpenWelcome then
+        local welcome = U.Button(f, "Welcome / what's new", 170, 22)
+        welcome:SetScript("OnClick", function() LIB.OpenWelcome("Guildhall") end)
+        buttons[#buttons + 1] = welcome
+    end
+    if extraButton then buttons[#buttons + 1] = extraButton(f) end
+    for i, b in ipairs(buttons) do
+        if i == 1 then place(b, 4, 8) else b:SetPoint("LEFT", buttons[i - 1], "RIGHT", 8, 0) end
+    end
+    if LIB and LIB.WelcomePsstText then
+        local psst = f:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+        place(psst, 14, 10)
+        psst:SetPoint("RIGHT", f, "RIGHT", -8, 0)
+        psst:SetJustifyH("LEFT")
+        psst:SetSpacing(2)
+        f.psst = psst
+    end
 end
 
 local function Refresh(f)
@@ -103,6 +134,7 @@ local function Refresh(f)
     local days = GH.Settings().listingDays or 14
     f.slider:SetValue(days)
     f.sliderLabel(days)
+    if f.psst then f.psst:SetText(LIB.WelcomePsstText("Guildhall")) end
 end
 
 function GH.OpenOptions()
@@ -111,24 +143,37 @@ end
 
 GH.RegisterTab("settings", "Settings", Build, Refresh)
 
--- Blizzard's Options -> AddOns -> Guildhall.
+-- Blizzard's Options -> AddOns -> Guildhall: the same page, plus a way into the window.
+local function OpenGuildhallButton(parent)
+    local open = U.Button(parent, "Open Guildhall", 130, 22)
+    open:SetScript("OnClick", function()
+        -- The Options panel is protected in combat; leave it open then and say so.
+        if SettingsPanel and SettingsPanel:IsShown() then
+            if InCombatLockdown() then
+                GH.msg("Options can't be closed during combat - Guildhall is open behind it.")
+            else
+                SettingsPanel:Close()
+            end
+        end
+        GH.ShowTab("browse")
+    end)
+    return open
+end
+
 local function RegisterBlizzardPanel()
     if not (Settings and Settings.RegisterCanvasLayoutCategory) then return end
     local panel = CreateFrame("Frame")
     local page = CreateFrame("Frame", nil, panel)
     page:SetPoint("TOPLEFT", 10, -10)
     page:SetPoint("BOTTOMRIGHT", -10, 10)
-    Build(page)
-    local open = GH.UI.Button(page, "Open Guildhall", 130, 22)
-    open:SetPoint("BOTTOMRIGHT", -4, 4)
-    open:SetScript("OnClick", function()
-        -- The Options panel is protected in combat; leave it open then.
-        if SettingsPanel and SettingsPanel:IsShown() and not InCombatLockdown() then SettingsPanel:Close() end
-        GH.ShowTab("browse")
-    end)
+    Build(page, OpenGuildhallButton)
     panel:SetScript("OnShow", function() Refresh(page) end)
-    local category = Settings.RegisterCanvasLayoutCategory(panel, "Guildhall")
-    Settings.RegisterAddOnCategory(category)
+    -- Under YippYapp in Options -> AddOns (the lib also links it to the YippYapp page's Settings button).
+    if LIB and LIB.RegisterOptionsPage then
+        LIB.RegisterOptionsPage("Guildhall", panel)
+    else
+        Settings.RegisterAddOnCategory(Settings.RegisterCanvasLayoutCategory(panel, "Guildhall"))
+    end
 end
 
 GH.Listen("LOGIN", RegisterBlizzardPanel)

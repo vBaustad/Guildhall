@@ -6,6 +6,7 @@ local state = { query = "", source = "all", prof = nil, online = false, selected
 local view      -- the tab frame
 local LIST_ROWS, LIST_ROW_H = 15, 22
 local DETAIL_ROW_H = 36
+local FILTER_LABELS = { all = "Everything", crafts = "Crafts", listings = "Guildies have", wants = "Wanted" }
 
 -- ---------------------------------------------------------------------------
 -- Request popup
@@ -16,6 +17,9 @@ local function BuildPopup()
     popup = U.Window("GuildhallRequestPopup", UIParent, 340, 196)
     popup:SetPoint("CENTER", 0, 80)
     popup:SetFrameStrata("DIALOG")
+    -- Esc closes this popup first, then the window behind it: one per press.
+    local LIB = LibStub and LibStub("LibForever-1.0", true)
+    if LIB and LIB.RegisterPopup then LIB.RegisterPopup(popup) end
     popup.title = popup.NineSlice.Text
 
     popup.icon = U.KeyIcon(popup, 28)
@@ -100,7 +104,9 @@ local function MakeDetailRow(parent)
 end
 
 local function PersonLabel(owner, class)
-    if owner == GH.Me() then return "|c" .. GH.ClassColor(class) .. "You|r" end
+    if owner == GH.Me() then
+        return "|c" .. GH.ClassColor(class) .. GH.Short(owner) .. "|r |cff7fc8ff(you)|r"
+    end
     if GH.IsOnline(owner) then return GH.ColorName(owner, class) end
     return "|cff8a8a8a" .. GH.Short(owner) .. "|r"
 end
@@ -246,13 +252,38 @@ local function Refresh()
         RenderDetail()
         return
     end
-    local results, loading = I.Search(state.query, state)
+    -- Counts per filter for the same search, so every filter shows what it holds.
+    local all, loading = I.Search(state.query, { source = "all", prof = state.prof, online = state.online })
+    local counts = { all = #all, crafts = 0, listings = 0, wants = 0 }
+    for _, r in ipairs(all) do
+        if #r.crafters > 0 then counts.crafts = counts.crafts + 1 end
+        if #r.listings > 0 then counts.listings = counts.listings + 1 end
+        if #r.wants > 0 then counts.wants = counts.wants + 1 end
+    end
+    for value, label in pairs(FILTER_LABELS) do
+        view.source:SetLabel(value, ("%s (%d)"):format(label, counts[value]))
+        view.source:SetDim(value, counts[value] == 0)
+    end
+
+    local results = state.source == "all" and all or I.Search(state.query, state)
     view.results = results
     view.list:SetData(results)
     if loading > 0 then
         view.loading:SetText(("|cff8a8a8aloading %d item names...|r"):format(loading))
     elseif #results == 0 then
-        view.loading:SetText(state.query ~= "" and "|cff8a8a8ano matches|r" or "|cff8a8a8anothing shared yet|r")
+        local text
+        if state.query ~= "" or state.prof or state.online then
+            text = "no matches"
+        elseif state.source == "listings" then
+            text = "Nobody has posted items yet - offer one from My Guildhall"
+        elseif state.source == "wants" then
+            text = "Nothing wanted yet - post a want from My Guildhall"
+        elseif GH.HasSharedRecipes and GH.HasSharedRecipes() then
+            text = "nothing to show yet"
+        else
+            text = "nothing shared yet - your recipes are added shortly after you log in"
+        end
+        view.loading:SetText("|cff8a8a8a" .. text .. "|r")
     else
         view.loading:SetText(("|cff8a8a8a%d items|r"):format(#results))
     end
@@ -272,15 +303,16 @@ local function Build(f)
     f.search = search
 
     local source = U.Segmented(f, {
-        { value = "all", label = "Everything" },
-        { value = "crafts", label = "Crafts" },
-        { value = "listings", label = "Guildies have" },
-        { value = "wants", label = "Wanted" },
-    }, 340, function(v)
+        { value = "all", label = FILTER_LABELS.all, tip = "Everything the guild can craft, has to spare or is looking for." },
+        { value = "crafts", label = FILTER_LABELS.crafts, tip = "Items and enchants a guildie with Guildhall can craft." },
+        { value = "listings", label = FILTER_LABELS.listings, tip = "Items guildies have posted as available, from their bags." },
+        { value = "wants", label = FILTER_LABELS.wants, tip = "Items guildies are looking for." },
+    }, 420, function(v)
         state.source = v
         Refresh()
     end)
     source:SetPoint("LEFT", search, "RIGHT", 14, 0)
+    f.source = source
 
     local online = U.Checkbox(f, "Online only")
     online:SetPoint("LEFT", source, "RIGHT", 12, 0)

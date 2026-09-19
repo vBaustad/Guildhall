@@ -2,7 +2,7 @@
 local ADDON, GH = ...
 local U = GH.UI
 
-local W, H = 800, 580
+local W, H = 800, 600
 local win
 local tabs = {}         -- ordered { id, label, frame, build, refresh }
 local tabById = {}
@@ -28,7 +28,13 @@ local function RefreshActive()
         if g then for _ in pairs(g.members) do n = n + 1 end end
         local online = 0
         for full in pairs(GH.Sync.peers) do if GH.IsOnline(full) then online = online + 1 end end
-        win.status:SetText(("|c%s<%s>|r  |cff8a8a8a%d guildies shared, %d online|r"):format(GH.CREAM, guild, n, online))
+        local shared
+        if n == 0 then
+            shared = "only you so far"
+        else
+            shared = ("you + %d guildie%s shared, %d online"):format(n, n == 1 and "" or "s", online)
+        end
+        win.status:SetText(("|c%s<%s>|r  |cff8a8a8a%s|r"):format(GH.CREAM, guild, shared))
     end
     local newCount = GH.Orders.NewCount()
     win.tabs:SetLabel("requests", newCount > 0 and ("Requests |cffff6060(" .. newCount .. ")|r") or "Requests")
@@ -60,21 +66,11 @@ local function Build()
     if win then return end
     -- Laid out like Blizzard's Options panel: title bar, tabs, content, red Close button.
     win = U.Window("GuildhallFrame", UIParent, W, H, "Guildhall")
-    win:SetFrameStrata("HIGH")
-    win:SetMovable(true)
-    win:RegisterForDrag("LeftButton")
-    win:SetScript("OnDragStart", win.StartMoving)
-    win:SetScript("OnDragStop", function(self)
-        self:StopMovingOrSizing()
-        GH.Settings().pos = { x = self:GetLeft(), y = self:GetTop() }
-    end)
-
-    local pos = GH.Settings().pos
-    if pos and pos.x then
-        win:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", pos.x, pos.y)
-    else
-        win:SetPoint("CENTER")
-    end
+    win:SetPoint("CENTER")
+    -- LibForever handles strata, raising, dragging, the saved position (Settings().pos) and Esc, so our
+    -- windows never blend into each other when they overlap.
+    local LIB = LibStub and LibStub("LibForever-1.0", true)
+    if LIB and LIB.RegisterWindow then LIB.RegisterWindow(win, GH.Settings(), "pos") end
 
     local items = {}
     for _, t in ipairs(tabs) do items[#items + 1] = { value = t.id, label = t.label } end
@@ -93,17 +89,16 @@ local function Build()
 
     local close = U.Button(win, CLOSE or "Close", 96, 22)
     close:SetPoint("BOTTOMRIGHT", -16, 16)
-    close:GetFontString():SetFontObject("GameFontNormal")
+    close:SetNormalFontObject("GameFontNormal")
+    close:SetHighlightFontObject("GameFontHighlight")
     close:SetScript("OnClick", function() win:Hide() end)
 
     win.status = U.Text(win, "GameFontHighlightSmall")
     win.status:SetPoint("LEFT", win, "BOTTOMLEFT", 24, 27)
     win.status:SetPoint("RIGHT", close, "LEFT", -12, 0)
 
-    win:SetScript("OnShow", function()
-        GH.RequestRoster()
-        RefreshActive()
-    end)
+    -- HookScript: LibForever's RegisterWindow already hooked OnShow (raise, place, Esc).
+    win:HookScript("OnShow", RefreshActive)
     win:Hide()
 end
 

@@ -7,9 +7,25 @@ GH.Index = I
 local index = {}      -- [key] = { key, crafters = {...}, listings = {...}, wants = {...} }
 local dirty = true
 
-GH.Listen("DATA_CHANGED", function() dirty = true end)
-GH.Listen("GUILD_CHANGED", function() dirty = true end)
-GH.Listen("ROSTER", function() dirty = true end)
+-- Rebuilding walks every stored profile, so it never runs inside a tooltip hook or in combat:
+-- changes mark the index dirty and a rebuild follows shortly after, out of combat.
+local function ScheduleBuild()
+    dirty = true
+    GH.Coalesce("indexBuild", 1, function()
+        if not dirty then return end
+        if InCombatLockdown() then return end   -- PLAYER_REGEN_ENABLED picks it up
+        I.Build()
+    end)
+end
+
+GH.Listen("DATA_CHANGED", ScheduleBuild)
+GH.Listen("GUILD_CHANGED", ScheduleBuild)
+GH.Listen("LOGIN", ScheduleBuild)
+-- A profession scan that found nothing new doesn't bump the revision, but the index may still be stale.
+GH.Listen("MY_SCANNED", ScheduleBuild)
+-- Only a change in who is in the guild matters; online flags alone don't touch the index.
+GH.Listen("ROSTER", function(_, membersChanged) if membersChanged then ScheduleBuild() end end)
+GH.On("PLAYER_REGEN_ENABLED", function() if dirty then ScheduleBuild() end end)
 
 local function Entry(key)
     local e = index[key]
@@ -48,9 +64,14 @@ end
 
 function I.Build()
     wipe(index)
-    dirty = false
+    -- Right after login the guild name can still be unknown: stay dirty so the next search or
+    -- GUILD_CHANGED builds it for real, instead of keeping an empty index.
     local g = GH.GuildDB()
-    if not g then return end
+    if not g then
+        dirty = true
+        return
+    end
+    dirty = false
     local me = GH.Me()
     local added = {}
     local mine = GH.MyData()
@@ -158,9 +179,13 @@ function I.Search(query, opts)
     return results, loading
 end
 
--- Online people first, then by name. Works on crafter / listing / want entries.
+-- Guildies first (online before offline, then by skill and name); you always come last.
+-- Works on crafter / listing / want entries.
 function I.SortPeople(list)
+    local me = GH.Me()
     table.sort(list, function(a, b)
+        local ma, mb = a.owner == me, b.owner == me
+        if ma ~= mb then return mb end
         local oa, ob = GH.IsOnline(a.owner), GH.IsOnline(b.owner)
         if oa ~= ob then return oa end
         if (a.rank or 0) ~= (b.rank or 0) then return (a.rank or 0) > (b.rank or 0) end
@@ -235,7 +260,8 @@ local function AddTooltipLines(tt, itemID)
         id = link and tonumber(link:match("item:(%d+)"))
     end
     if not id then return end
-    local e = I.Get(id)
+    -- Read whatever is built; a pending rebuild runs on its own timer, never inside the tooltip hook.
+    local e = index[id]
     if not e then return end
     tt.guildhallDone = true
     local shown = false
