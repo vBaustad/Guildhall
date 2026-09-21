@@ -7,6 +7,16 @@ local view      -- the tab frame
 local LIST_ROWS, LIST_ROW_H = 15, 22
 local DETAIL_ROW_H = 36
 local FILTER_LABELS = { all = "Everything", crafts = "Crafts", listings = "Guildies have", wants = "Wanted" }
+local CARD_W, CARD_H, GRID_GAP, CHIP_W = 340, 64, 10, 120
+-- Cooking, First Aid and Fishing sit apart from the crafting professions.
+local SECONDARY = { Cooking = true, ["First Aid"] = true, Fishing = true }
+local QUALITY_NAMES = { [0] = "Poor", "Common", "Uncommon", "Rare", "Epic" }
+
+local function Prefs()
+    local st = GH.Settings()
+    st.browse = st.browse or {}
+    return st.browse
+end
 
 -- ---------------------------------------------------------------------------
 -- Request popup
@@ -14,7 +24,7 @@ local FILTER_LABELS = { all = "Everything", crafts = "Crafts", listings = "Guild
 local popup
 local function BuildPopup()
     if popup then return end
-    popup = U.Window("GuildhallRequestPopup", UIParent, 340, 196)
+    popup = U.Window("GuildhallRequestPopup", UIParent, 340, 216)
     popup:SetPoint("CENTER", 0, 80)
     popup:SetFrameStrata("DIALOG")
     -- Esc closes this popup first, then the window behind it: one per press.
@@ -37,6 +47,13 @@ local function BuildPopup()
     popup.note = U.EditBox(popup, 296, "Note (optional) - e.g. I have the mats")
     popup.note:SetPoint("TOPLEFT", 24, -110)
 
+    -- Some things can't be handed over even when someone can craft them.
+    popup.warn = popup:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+    popup.warn:SetPoint("TOPLEFT", 20, -138)
+    popup.warn:SetPoint("RIGHT", -18, 0)
+    popup.warn:SetJustifyH("LEFT")
+    popup.warn:SetTextColor(1, 0.4, 0.4)
+
     popup.send = U.Button(popup, "Send request", 110, 22)
     popup.send:SetPoint("BOTTOMRIGHT", -16, 16)
     local cancel = U.Button(popup, "Cancel", 80, 22)
@@ -46,8 +63,9 @@ local function BuildPopup()
     popup.send:SetScript("OnClick", function()
         local ok, err = GH.Orders.Request(popup.crafter, popup.key, popup.qty:GetNumber(), popup.note:GetText())
         if ok then
+            -- The request is stored either way: it is (re)sent whenever the crafter is online.
             if GH.IsOnline(popup.crafter) then
-                GH.msg("request sent to %s.", GH.Short(popup.crafter))
+                GH.msg("asked %s to craft it - see |cffffd100/gh requests|r.", GH.Short(popup.crafter))
             else
                 GH.msg("%s is offline - your request will be delivered when they log in.", GH.Short(popup.crafter))
             end
@@ -67,6 +85,15 @@ function GH.OpenRequest(crafter, key)
     popup.item:SetText(C.KeyColor(key) .. (I.Name(key) or "...") .. "|r")
     popup.qty:SetNumber(1)
     popup.note:SetText("")
+    local blocked = type(key) == "number" and C.UntradableType(key)
+    if blocked == "bop" then
+        popup.warn:SetText("This item is soulbound when crafted, so " .. GH.Short(crafter)
+            .. " can't hand it over. Ask them to craft it from your own materials instead.")
+    elseif blocked == "quest" then
+        popup.warn:SetText("Quest items can't be traded.")
+    else
+        popup.warn:SetText("")
+    end
     popup:Show()
 end
 
@@ -149,7 +176,8 @@ local function RenderDetail()
     local crafters = I.SortPeople({ unpack(e.crafters) })
     local listings = I.SortPeople({ unpack(e.listings) })
     local wants = I.SortPeople({ unpack(e.wants) })
-    local sub = ("%d crafter%s, %d listed, %d wanted"):format(#crafters, #crafters == 1 and "" or "s", #listings, #wants)
+    local sub = ("%s, %d %s one, %d %s one"):format(GH.Count(#crafters, "crafter"),
+        #listings, #listings == 1 and "has" or "have", #wants, #wants == 1 and "wants" or "want")
     local recipe = I.RecipeInfoFor(key)
     if recipe then
         local req = { ("%s %s"):format(GH.ProfName(recipe.prof), recipe.learn or recipe.yellow or "?") }
@@ -199,7 +227,9 @@ local function RenderDetail()
             local isMe = c.owner == GH.Me()
             r.name:SetText(PersonLabel(c.owner, c.class))
             r.meta:SetText(("|cff8a8a8a%s %d|r"):format(c.prof, c.rank or 0))
-            r.note:SetText(isMe and "" or (GH.IsOnline(c.owner) and "|cff60d060online|r" or "offline - requests wait until they log in"))
+            local note = isMe and "" or (GH.IsOnline(c.owner) and "|cff60d060online|r" or "offline - requests wait until they log in")
+            if c.stale then note = note .. " |cff8a8a8a(from your last session)|r" end
+            r.note:SetText(note)
             r.tip = { GH.Short(c.owner), ("%s, skill %d"):format(c.prof, c.rank or 0) }
             r.b1:SetShown(not isMe)
             r.b2:SetShown(not isMe)
@@ -229,9 +259,13 @@ local function RenderDetail()
             local r = row()
             local isMe = w.owner == GH.Me()
             r.name:SetText(PersonLabel(w.owner, w.class))
-            r.meta:SetText("|cff8a8a8a" .. GH.Ago(w.w.posted) .. "|r")
-            r.note:SetText(w.w.note ~= "" and w.w.note or "|cff6a6a6ano note|r")
-            r.tip = { GH.Short(w.owner), w.w.note ~= "" and w.w.note or nil }
+            local want = w.w
+            r.meta:SetText(("|cffffffffx%d|r  %s|cff8a8a8a%s|r"):format(want.qty or 1,
+                (want.price or 0) > 0 and ("|cffffd100" .. GH.Money(want.price) .. " each|r  ") or "",
+                GH.Ago(want.posted)))
+            r.note:SetText(want.note ~= "" and want.note or "|cff6a6a6ano note|r")
+            r.tip = { GH.Short(w.owner), GH.Listings.WantText(want, I.Name(key)),
+                want.note ~= "" and want.note or nil }
             r.b1:SetShown(not isMe)
             r.b1:SetEnabled(GH.IsOnline(w.owner))
             r.b2:Hide()
@@ -244,6 +278,103 @@ end
 -- ---------------------------------------------------------------------------
 -- Build
 -- ---------------------------------------------------------------------------
+-- ---------------------------------------------------------------------------
+-- Grouping: one collapsible heading per profession, then "Guildies have" and "Wanted"
+-- ---------------------------------------------------------------------------
+local HAVE_GROUP, WANT_GROUP = "Guildies have", "Wanted"
+local GROUP_ICON = {
+    [HAVE_GROUP] = "Interface\\Icons\\INV_Misc_Bag_08",
+    [WANT_GROUP] = "Interface\\Icons\\INV_Misc_Note_01",
+}
+
+local function Collapsed()
+    local st = GH.Settings()
+    st.collapsed = st.collapsed or {}
+    return st.collapsed
+end
+
+-- Which heading an item belongs under: the profession that makes it, else where it was posted.
+local function GroupOf(r)
+    local recipe = I.RecipeInfoFor(r.key)
+    if recipe and recipe.prof then return GH.ProfName(recipe.prof) end
+    if #r.crafters > 0 then return r.crafters[1].prof end
+    if #r.listings > 0 then return HAVE_GROUP end
+    return WANT_GROUP
+end
+
+-- Professions this character has come first, then the rest alphabetically; posts last.
+local function GroupOrder(name)
+    if name == HAVE_GROUP then return 3 end
+    if name == WANT_GROUP then return 4 end
+    local d = GH.MyData()
+    for id in pairs(d and d.profs or {}) do
+        if GH.ProfName(id) == name then return 1 end
+    end
+    return 2
+end
+
+-- Turns the search results into rows: heading, then its items unless it is collapsed.
+local function Grouped(results, expandAll)
+    if state.source == "listings" or state.source == "wants" then return results end
+    local groups, order = {}, {}
+    for _, r in ipairs(results) do
+        local name = GroupOf(r)
+        local g = groups[name]
+        if not g then
+            g = { name = name, items = {} }
+            groups[name] = g
+            order[#order + 1] = g
+        end
+        g.items[#g.items + 1] = r
+    end
+    table.sort(order, function(a, b)
+        local oa, ob = GroupOrder(a.name), GroupOrder(b.name)
+        if oa ~= ob then return oa < ob end
+        return a.name < b.name
+    end)
+    local collapsed = Collapsed()
+    local rows = {}
+    for _, g in ipairs(order) do
+        local shut = not expandAll and collapsed[g.name]
+        rows[#rows + 1] = { header = true, group = g.name, count = #g.items, collapsed = shut }
+        if not shut then
+            for _, r in ipairs(g.items) do rows[#rows + 1] = r end
+        end
+    end
+    return rows
+end
+
+-- One card per profession: who has it, how far, and the best crafters.
+local function ProfessionCards()
+    local groups = I.Professions()
+    local have, missing = {}, {}
+    local showSecondary = Prefs().showSecondary
+    local seen = {}
+    for id, g in pairs(groups) do
+        local name = GH.ProfName(id)
+        seen[name] = true
+        if not GH.GATHERING[name] and (showSecondary or not SECONDARY[name]) then
+            have[#have + 1] = { prof = name, id = id, people = g.people, best = g.best }
+        end
+    end
+    for _, name in ipairs(GH.PROFESSIONS) do
+        if not seen[name] and not GH.GATHERING[name] and (showSecondary or not SECONDARY[name]) then
+            missing[#missing + 1] = { prof = name, missing = true }
+        end
+    end
+    table.sort(have, function(a, b)
+        if #a.people ~= #b.people then return #a.people > #b.people end
+        return a.prof < b.prof
+    end)
+    table.sort(missing, function(a, b) return a.prof < b.prof end)
+    return have, missing
+end
+
+-- The item list is for searching and for one profession; otherwise you get the overview.
+local function ShowingOverview()
+    return state.query == "" and not state.prof
+end
+
 local function Refresh()
     if not view then return end
     if not GH.GuildDB() then
@@ -266,13 +397,40 @@ local function Refresh()
     end
 
     local results = state.source == "all" and all or I.Search(state.query, state)
+    -- Minimum quality: Poor keeps everything, Epic keeps only epics.
+    local minQuality = Prefs().minQuality or 0
+    if minQuality > 0 then
+        local kept = {}
+        for _, r in ipairs(results) do
+            if C.KeyQuality(r.key) >= minQuality then kept[#kept + 1] = r end
+        end
+        results = kept
+    end
     view.results = results
-    view.list:SetData(results)
+
+    local overview = ShowingOverview()
+    view.cardBox:SetShown(overview)
+    view.listBox:SetShown(not overview)
+    view.detailBox:SetShown(not overview)
+    view.back:SetShown(not overview)
+    view.quality:SetShown(not overview)
+    view.secondary:SetShown(overview)
+    view.profLabel:SetShown(not overview)
+    for _, b in ipairs(view.profButtons) do b:SetShown(not overview) end
+    if overview then
+        view.RenderOverview()
+        view.loading:SetText("")
+        return
+    end
+    -- A search or a profession filter always shows its hits: nothing hides behind a collapsed heading.
+    view.list:SetData(Grouped(results, state.query ~= "" or state.prof ~= nil))
     if loading > 0 then
-        view.loading:SetText(("|cff8a8a8aloading %d item names...|r"):format(loading))
+        view.loading:SetText(("|cff8a8a8aloading %s...|r"):format(GH.Count(loading, "item name")))
     elseif #results == 0 then
         local text
-        if state.query ~= "" or state.prof or state.online then
+        if GH.Sync.syncing then
+            text = "syncing with your guild..."
+        elseif state.query ~= "" or state.prof or state.online then
             text = "no matches"
         elseif state.source == "listings" then
             text = "Nobody has posted items yet - offer one from My Guildhall"
@@ -285,7 +443,7 @@ local function Refresh()
         end
         view.loading:SetText("|cff8a8a8a" .. text .. "|r")
     else
-        view.loading:SetText(("|cff8a8a8a%d items|r"):format(#results))
+        view.loading:SetText(("|cff8a8a8a%s|r"):format(GH.Count(#results, "item")))
     end
     RenderDetail()
 end
@@ -324,6 +482,7 @@ local function Build(f)
     -- Profession filter icons
     f.profButtons = {}
     local lbl = U.Text(f, "GameFontNormalSmall")
+    f.profLabel = lbl
     lbl:SetPoint("TOPLEFT", 6, -36)
     lbl:SetText("Profession:")
     local prev
@@ -340,13 +499,7 @@ local function Build(f)
             t:SetTexCoord(0.07, 0.93, 0.07, 0.93)
             b.tex, b.prof = t, name
             b:SetScript("OnClick", function()
-                state.prof = (state.prof ~= name) and name or nil
-                for _, other in ipairs(f.profButtons) do
-                    local on = other.prof == state.prof
-                    other:SetBackdropBorderColor(on and 1 or 0.3, on and 0.82 or 0.3, on and 0.3 or 0.3, 1)
-                    other.tex:SetDesaturated(state.prof ~= nil and not on)
-                end
-                Refresh()
+                f.SetProfession((state.prof ~= name) and name or nil)
             end)
             b:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
             U.Tooltip(b, name, "Click to show only " .. name .. " crafts. Click again to clear.")
@@ -355,12 +508,204 @@ local function Build(f)
         end
     end
 
+    -- One way in and out of a profession, used by the icon row, the cards and the back button.
+    function f.SetProfession(name)
+        state.prof = name
+        for _, other in ipairs(f.profButtons) do
+            local on = other.prof == name
+            other:SetBackdropBorderColor(on and 1 or 0.3, on and 0.82 or 0.3, on and 0.3 or 0.3, 1)
+            other.tex:SetDesaturated(name ~= nil and not on)
+        end
+        Refresh()
+    end
+
     f.loading = U.Text(f, "GameFontHighlightSmall", "RIGHT")
-    f.loading:SetPoint("TOPRIGHT", -6, -40)
+    f.loading:SetPoint("TOPRIGHT", -6, -62)   -- the filter row above it holds the back button
+
+    -- Back to the overview, shown while a profession or a search is in play.
+    f.back = U.Button(f, "< All professions", 120, 20)
+    f.back:SetPoint("TOPRIGHT", -6, -36)
+    f.back:SetScript("OnClick", function()
+        f.search:SetText("")
+        state.query = ""
+        f.SetProfession(nil)
+    end)
+
+    -- Minimum quality for the item list.
+    f.quality = U.Segmented(f, {
+        { value = 0, label = "All", tip = "Show items of every quality." },
+        { value = 2, label = "|cff1eff00Uncommon+|r", tip = "Hide poor and common items." },
+        { value = 3, label = "|cff0070ddRare+|r", tip = "Show only rare and epic items." },
+        { value = 4, label = "|cffa335eeEpic|r", tip = "Show only epic items." },
+    }, 260, function(v)
+        Prefs().minQuality = v
+        Refresh()
+    end)
+    f.quality:SetPoint("TOPLEFT", 6, -58)
+    f.quality:Select(Prefs().minQuality or 0)
+
+    -- Overview: one card per profession.
+    f.secondary = U.Checkbox(f, "Show secondary professions")
+    f.secondary:SetPoint("TOPLEFT", 4, -36)   -- the profession row is hidden on the overview
+    f.secondary:SetChecked(Prefs().showSecondary and true or false)
+    f.secondary:SetScript("OnClick", function(self)
+        Prefs().showSecondary = self:GetChecked() and true or nil
+        Refresh()
+    end)
+    U.Tooltip(f.secondary, "Secondary professions", "Cooking, First Aid and Fishing.")
+
+    local cardBox = U.Inset(f)
+    cardBox:SetPoint("TOPLEFT", 0, -62)
+    cardBox:SetPoint("BOTTOMRIGHT", 0, 0)
+    f.cardBox = cardBox
+
+    local cardScroll = CreateFrame("ScrollFrame", nil, cardBox, "UIPanelScrollFrameTemplate")
+    cardScroll:SetPoint("TOPLEFT", 8, -8)
+    cardScroll:SetPoint("BOTTOMRIGHT", -28, 8)
+    local canvas = CreateFrame("Frame", nil, cardScroll)
+    canvas:SetSize(10, 10)
+    cardScroll:SetScrollChild(canvas)
+
+    f.overviewEmpty = U.Text(cardBox, "GameFontDisable", "CENTER")
+    f.overviewEmpty:SetPoint("TOPLEFT", 20, -30)
+    f.overviewEmpty:SetPoint("RIGHT", -20, 0)
+    f.overviewEmpty:SetWordWrap(true)
+    f.overviewEmpty:SetText("Nobody has shared a profession yet. Yours is shared automatically - guildies "
+        .. "with Guildhall show up here.")
+
+    -- One real card per covered profession: icon, name, a skill bar and the best crafters.
+    local cards, chips = {}, {}
+    local function Card(i)
+        local card = cards[i]
+        if card then return card end
+        card = CreateFrame("Button", nil, canvas, "BackdropTemplate")
+        card:SetSize(CARD_W, CARD_H)
+        U.InsetLook(card)
+        local hl = card:CreateTexture(nil, "HIGHLIGHT")
+        hl:SetAllPoints()
+        hl:SetColorTexture(1, 1, 1, 0.06)
+        card.icon = card:CreateTexture(nil, "ARTWORK")
+        card.icon:SetSize(40, 40)
+        card.icon:SetPoint("LEFT", 10, 0)
+        card.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+        card.name = U.Text(card, "GameFontNormal")
+        card.name:SetPoint("TOPLEFT", card.icon, "TOPRIGHT", 10, 0)
+        card.name:SetPoint("RIGHT", -10, 0)
+        -- Skill bar: how far the guild's best has come towards 300.
+        card.barBg = card:CreateTexture(nil, "ARTWORK")
+        card.barBg:SetSize(120, 6)
+        card.barBg:SetPoint("TOPLEFT", card.name, "BOTTOMLEFT", 0, -4)
+        card.barBg:SetColorTexture(0, 0, 0, 0.5)
+        card.bar = card:CreateTexture(nil, "OVERLAY")
+        card.bar:SetHeight(6)
+        card.bar:SetPoint("TOPLEFT", card.barBg, "TOPLEFT", 0, 0)
+        card.bar:SetColorTexture(0.82, 0.67, 0.38, 0.9)
+        card.sub = U.Text(card, "GameFontHighlightSmall")
+        card.sub:SetPoint("LEFT", card.barBg, "RIGHT", 8, 0)
+        card.sub:SetPoint("RIGHT", -10, 0)
+        card.who = U.Text(card, "GameFontDisableSmall")
+        card.who:SetPoint("TOPLEFT", card.barBg, "BOTTOMLEFT", 0, -5)
+        card.who:SetPoint("RIGHT", -10, 0)
+        card:SetScript("OnClick", function(self) f.SetProfession(self.prof) end)
+        card:SetScript("OnEnter", function(self)
+            if not self.people then return end
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:AddLine(self.prof, 1, 0.82, 0.3)
+            for _, person in ipairs(self.people) do
+                local label = GH.ColorName(person.owner, person.class)
+                    .. (person.owner == GH.Me() and " |cff7fc8ff(you)|r" or "")
+                GameTooltip:AddDoubleLine(label, ("skill %d"):format(person.rank), 1, 1, 1, 0.8, 0.8, 0.8)
+            end
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddLine("Click to see what they can make.", 0.5, 0.5, 0.5)
+            GameTooltip:Show()
+        end)
+        card:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        cards[i] = card
+        return card
+    end
+
+    -- Professions nobody has: small dimmed chips, so the gaps take one line, not five cards.
+    local function Chip(i)
+        local chip = chips[i]
+        if chip then return chip end
+        chip = CreateFrame("Frame", nil, canvas)
+        chip:SetSize(CHIP_W, 26)
+        chip.icon = chip:CreateTexture(nil, "ARTWORK")
+        chip.icon:SetSize(20, 20)
+        chip.icon:SetPoint("LEFT", 2, 0)
+        chip.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+        chip.icon:SetDesaturated(true)
+        chip.icon:SetAlpha(0.5)
+        chip.name = U.Text(chip, "GameFontDisableSmall")
+        chip.name:SetPoint("LEFT", chip.icon, "RIGHT", 5, 0)
+        chip.name:SetPoint("RIGHT", -2, 0)
+        chips[i] = chip
+        return chip
+    end
+
+    f.missingHead = U.Heading(canvas, "Not covered yet - nobody in the guild has shared these.")
+    f.missingHead:SetTextColor(0.6, 0.6, 0.6)
+
+    -- Lay the cards out in as many columns as fit, then the chips below a divider.
+    function f.RenderOverview()
+        local have, missing = ProfessionCards()
+        local width = cardScroll:GetWidth()
+        if width < 10 then width = 700 end
+        local columns = math.max(1, math.floor((width + GRID_GAP) / (CARD_W + GRID_GAP)))
+        f.overviewEmpty:SetShown(#have == 0)
+        local y = 0
+        for i, data in ipairs(have) do
+            local card = Card(i)
+            local col, rowIndex = (i - 1) % columns, math.floor((i - 1) / columns)
+            card:ClearAllPoints()
+            card:SetPoint("TOPLEFT", col * (CARD_W + GRID_GAP), -rowIndex * (CARD_H + GRID_GAP))
+            card.prof, card.people = data.prof, data.people
+            card.icon:SetTexture(GH.ProfIcon(data.prof))
+            card.name:SetText("|c" .. GH.CREAM .. data.prof .. "|r")
+            card.bar:SetWidth(math.max(1, 120 * math.min(1, (data.best or 0) / 300)))
+            card.sub:SetText(("|cff8a8a8a%s - up to %d|r"):format(GH.Count(#data.people, "guildie"), data.best))
+            local names = {}
+            for n = 1, math.min(2, #data.people) do
+                local person = data.people[n]
+                names[#names + 1] = ("%s%s %d"):format(GH.Short(person.owner),
+                    person.owner == GH.Me() and " (you)" or "", person.rank)
+            end
+            if #data.people > 2 then names[#names + 1] = ("+%d more"):format(#data.people - 2) end
+            card.who:SetText(table.concat(names, "  |cff4a4a4a-|r  "))
+            card:Show()
+        end
+        for i = #have + 1, #cards do cards[i]:Hide() end
+        if #have > 0 then
+            y = -(math.ceil(#have / columns) * (CARD_H + GRID_GAP)) - 6
+        end
+
+        f.missingHead:SetShown(#missing > 0)
+        f.missingHead.line:SetShown(#missing > 0)
+        if #missing > 0 then
+            f.missingHead:ClearAllPoints()
+            f.missingHead:SetPoint("TOPLEFT", 2, y - 8)
+            y = y - 30
+            local perRow = math.max(1, math.floor((width + 6) / (CHIP_W + 6)))
+            for i, data in ipairs(missing) do
+                local chip = Chip(i)
+                local col, rowIndex = (i - 1) % perRow, math.floor((i - 1) / perRow)
+                chip:ClearAllPoints()
+                chip:SetPoint("TOPLEFT", col * (CHIP_W + 6), y - rowIndex * 26)
+                chip.icon:SetTexture(GH.ProfIcon(data.prof))
+                chip.name:SetText(data.prof)
+                chip:Show()
+            end
+            y = y - math.ceil(#missing / perRow) * 26
+        end
+        for i = #missing + 1, #chips do chips[i]:Hide() end
+        canvas:SetSize(math.max(10, width), math.max(10, -y + 10))
+    end
 
     -- Results list
     local listBox = U.Inset(f)
-    listBox:SetPoint("TOPLEFT", 0, -62)
+    f.listBox = listBox
+    listBox:SetPoint("TOPLEFT", 0, -84)
     listBox:SetSize(330, LIST_ROWS * LIST_ROW_H + 8)
     f.list = U.ScrollList(listBox, LIST_ROW_H, LIST_ROWS,
         function(row)
@@ -380,6 +725,12 @@ local function Build(f)
             row.info:SetPoint("RIGHT", -4, 0)
             row.name:SetPoint("RIGHT", row.info, "LEFT", -6, 0)
             row:SetScript("OnClick", function(self)
+                if self.group then
+                    local collapsed = Collapsed()
+                    collapsed[self.group] = not collapsed[self.group] or nil
+                    Refresh()
+                    return
+                end
                 if IsModifiedClick() then
                     local link = C.KeyLink(self.key)
                     if link then HandleModifiedItemClick(link) end
@@ -390,6 +741,7 @@ local function Build(f)
                 RenderDetail()
             end)
             row:SetScript("OnEnter", function(self)
+                if self.group then return end
                 GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
                 C.SetTooltip(GameTooltip, self.key)
                 GameTooltip:Show()
@@ -397,17 +749,38 @@ local function Build(f)
             row:SetScript("OnLeave", function() GameTooltip:Hide() end)
         end,
         function(row, r)
-            row.key = r.key
+            if r.header then
+                row.key, row.group = nil, r.group
+                row.icon:SetTexture(GROUP_ICON[r.group] or GH.ProfIcon(r.group))
+                row.name:SetText(("|cffe6b34d%s %s|r |cff8a8a8a(%d)|r"):format(
+                    r.collapsed and "+" or "-", r.group, r.count))
+                row.info:SetText("")
+                row.sel:Hide()
+                return
+            end
+            row.key, row.group = r.key, nil
             row.icon:SetTexture(C.KeyIcon(r.key))
             row.name:SetText(C.KeyColor(r.key) .. r.name .. "|r")
+            -- Say who, not just how many: "1 craft" read as "I can craft one".
             local parts = {}
             if #r.crafters > 0 then
                 local on = 0
                 for _, c in ipairs(r.crafters) do if GH.IsOnline(c.owner) then on = on + 1 end end
-                parts[#parts + 1] = (on > 0 and "|cff60d060" or "|cff8a8a8a") .. #r.crafters .. " craft|r"
+                local who
+                if #r.crafters == 1 then
+                    local c = r.crafters[1]
+                    who = c.owner == GH.Me() and "you" or GH.Short(c.owner)
+                else
+                    who = GH.Count(#r.crafters, "crafter")
+                end
+                parts[#parts + 1] = (on > 0 and "|cff60d060" or "|cff8a8a8a") .. who .. "|r"
             end
-            if #r.listings > 0 then parts[#parts + 1] = "|cffe6b34d" .. #r.listings .. " have|r" end
-            if #r.wants > 0 then parts[#parts + 1] = "|cff7da5ff" .. #r.wants .. " want|r" end
+            if #r.listings > 0 then
+                parts[#parts + 1] = ("|cffe6b34d%d %s one|r"):format(#r.listings, #r.listings == 1 and "has" or "have")
+            end
+            if #r.wants > 0 then
+                parts[#parts + 1] = ("|cff7da5ff%d %s one|r"):format(#r.wants, #r.wants == 1 and "wants" or "want")
+            end
             row.info:SetText(table.concat(parts, "  "))
             row.sel:SetShown(r.key == state.selected)
         end)
@@ -416,6 +789,7 @@ local function Build(f)
 
     -- Detail pane
     local detailBox = U.Inset(f)
+    f.detailBox = detailBox
     detailBox:SetPoint("TOPLEFT", listBox, "TOPRIGHT", 10, 0)
     detailBox:SetPoint("BOTTOMRIGHT", 0, 0)
     local d = { rows = {}, headings = {} }

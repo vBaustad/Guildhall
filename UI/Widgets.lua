@@ -29,6 +29,19 @@ function U.Window(name, parent, w, h, title)
     return f
 end
 
+-- The Options panel's bronze inset border, applied to an existing frame.
+function U.InsetLook(f)
+    if not f.SetBackdrop then Mixin(f, BackdropTemplateMixin) end
+    f:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 16,
+        insets = { left = 4, right = 4, top = 4, bottom = 4 },
+    })
+    f:SetBackdropColor(0.03, 0.02, 0.01, 0.4)
+    f:SetBackdropBorderColor(0.85, 0.80, 0.70, 1)
+    return f
+end
+
 -- Recessed box with the Options panel's bronze inset border.
 function U.Inset(parent)
     local f = CreateFrame("Frame", nil, parent, "BackdropTemplate")
@@ -237,7 +250,7 @@ end
 
 -- Open a whisper to someone, optionally with an item link typed in.
 function U.Whisper(full, key)
-    local target = GH.Short(full)
+    local target = GH.WhisperName(full) or GH.Short(full)
     local link = key and C.KeyLink(key)
     local text = "/w " .. target .. " " .. (link and (link .. " ") or "")
     if ChatFrameUtil and ChatFrameUtil.OpenChat then

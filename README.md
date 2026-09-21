@@ -59,7 +59,6 @@ YippYapp addons are set on the **YippYapp** page itself.
 - **Catching up.** When you log in, Guildhall fetches the latest profiles from guildies who are online.
   Online guildies also pass along the profiles of guildies who are offline. A passed-along copy is replaced as
   soon as its owner comes online.
-- **Chat lockdown.** While the game restricts chat, messages wait and are sent afterwards.
 
 ## Part of YippYapp
 

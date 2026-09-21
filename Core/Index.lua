@@ -42,7 +42,8 @@ local function AddProfile(p, listings, wants)
             local profName = GH.ProfName(skillLine)
             for spellID in pairs(prof.recipes) do
                 local list = Entry(C.RecipeOutputKey(spellID)).crafters
-                list[#list + 1] = { owner = p.owner, class = p.class, prof = profName, profID = skillLine, rank = prof.rank, spell = spellID }
+                list[#list + 1] = { owner = p.owner, class = p.class, prof = profName, profID = skillLine,
+                    rank = prof.rank, spell = spellID, stale = p.stale }
             end
         end
     end
@@ -81,7 +82,7 @@ function I.Build()
     end
     -- My alts in this guild: my own saved copy is the freshest there is.
     for owner, alt in pairs(GH.DB().chars) do
-        if not added[owner] and GH.IsGuildie(owner) then
+        if not added[owner] and GH.KnownGuildie(owner) then
             local stored = g.members[owner]
             if not stored or (alt.rev or 0) >= (stored.rev or 0) then
                 AddProfile(alt, alt.listings, alt.wants)
@@ -90,11 +91,62 @@ function I.Build()
         end
     end
     for owner, p in pairs(g.members) do
-        if not added[owner] and (GH.IsGuildie(owner) or not GH.rosterComplete) then
+        if not added[owner] and (GH.KnownGuildie(owner) or not GH.rosterComplete) then
             AddProfile(p, p.listings, p.wants)
         end
     end
     GH.Fire("INDEX_BUILT")
+end
+
+-- Who in the guild has each profession: { [professionID] = { people = { { owner, class, rank } },
+-- best = highest rank } }, built from the same profiles as the item index.
+function I.Professions()
+    if dirty then I.Build() end
+    local out = {}
+    local function add(p)
+        for id, prof in pairs(p.profs or {}) do
+            local g = out[id]
+            if not g then
+                g = { people = {}, best = 0 }
+                out[id] = g
+            end
+            g.people[#g.people + 1] = { owner = p.owner, class = p.class, rank = prof.rank or 0,
+                recipes = prof.recipes and I.CountSet(prof.recipes) or 0 }
+            g.best = math.max(g.best, prof.rank or 0)
+        end
+    end
+    local seen = {}
+    local mine = GH.MyData()
+    if mine then
+        add(mine)
+        seen[mine.owner] = true
+    end
+    for owner, alt in pairs(GH.DB().chars) do
+        if not seen[owner] and GH.KnownGuildie(owner) then
+            add(alt)
+            seen[owner] = true
+        end
+    end
+    local g = GH.GuildDB()
+    for owner, p in pairs(g and g.members or {}) do
+        if not seen[owner] then
+            add(p)
+            seen[owner] = true
+        end
+    end
+    for _, group in pairs(out) do
+        table.sort(group.people, function(a, b)
+            if a.rank ~= b.rank then return a.rank > b.rank end
+            return a.owner < b.owner
+        end)
+    end
+    return out
+end
+
+function I.CountSet(t)
+    local n = 0
+    for _ in pairs(t or {}) do n = n + 1 end
+    return n
 end
 
 function I.Get(key)

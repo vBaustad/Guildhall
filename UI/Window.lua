@@ -29,10 +29,12 @@ local function RefreshActive()
         local online = 0
         for full in pairs(GH.Sync.peers) do if GH.IsOnline(full) then online = online + 1 end end
         local shared
-        if n == 0 then
+        if GH.Sync.syncing then
+            shared = ("syncing with your guild... %s online with Guildhall"):format(GH.Count(online, "guildie"))
+        elseif n == 0 then
             shared = "only you so far"
         else
-            shared = ("you + %d guildie%s shared, %d online"):format(n, n == 1 and "" or "s", online)
+            shared = ("you + %s shared, %d online"):format(GH.Count(n, "guildie"), online)
         end
         win.status:SetText(("|c%s<%s>|r  |cff8a8a8a%s|r"):format(GH.CREAM, guild, shared))
     end
@@ -122,6 +124,6 @@ function GH.WindowShown(tabId)
     return win and win:IsShown() and (not tabId or activeTab == tabId)
 end
 
-for _, name in ipairs({ "DATA_CHANGED", "ORDERS_CHANGED", "ROSTER", "NAMES_LOADED", "MY_SCANNED", "PEER_SEEN", "GUILD_CHANGED" }) do
+for _, name in ipairs({ "DATA_CHANGED", "ORDERS_CHANGED", "ROSTER", "NAMES_LOADED", "MY_SCANNED", "PEER_SEEN", "GUILD_CHANGED", "SYNC_STATE" }) do
     GH.Listen(name, GH.RefreshWindow)
 end

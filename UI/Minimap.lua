@@ -16,7 +16,7 @@ local function OnTooltipShow(tt)
     tt:AddLine("Guildhall", 1, 0.82, 0.3)
     -- LibDBIcon has no badge, so new craft requests are counted here (and on the Requests tab).
     local n = GH.Orders.NewCount()
-    if n > 0 then tt:AddLine(("%d new craft request%s"):format(n, n == 1 and "" or "s"), 1, 0.4, 0.4) end
+    if n > 0 then tt:AddLine(GH.Count(n, "new craft request"), 1, 0.4, 0.4) end
     tt:AddLine("Left-click: open", 0.8, 0.8, 0.8)
     tt:AddLine("Right-click: settings", 0.8, 0.8, 0.8)
     tt:AddLine("Drag: move around the minimap", 0.6, 0.6, 0.6)
@@ -56,7 +56,7 @@ function Guildhall_OnAddonCompartmentEnter(_, menuButton)
     GameTooltip:SetOwner(menuButton, "ANCHOR_LEFT")
     GameTooltip:AddLine("Guildhall", 1, 0.82, 0.3)
     local n = GH.Orders.NewCount()
-    if n > 0 then GameTooltip:AddLine(("%d new craft request%s"):format(n, n == 1 and "" or "s"), 1, 0.4, 0.4) end
+    if n > 0 then GameTooltip:AddLine(GH.Count(n, "new craft request"), 1, 0.4, 0.4) end
     GameTooltip:AddLine("Left-click: open", 0.8, 0.8, 0.8)
     GameTooltip:AddLine("Right-click: settings", 0.8, 0.8, 0.8)
     GameTooltip:Show()

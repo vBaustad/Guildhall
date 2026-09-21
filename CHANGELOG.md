@@ -1,5 +1,20 @@
 # Guildhall
 
+## 0.2.0-beta2
+
+- **Guild sharing works.** Messages were held back during the game's chat lockdown, so nothing reached guildies. They're sent straight away now.
+- Sharing starts right at login and no longer waits for the guild roster.
+- Your saved guild directory is no longer wiped on login.
+- Browse opens on an overview: one card per profession with who has it and how far they've got, plus the professions nobody in the guild covers yet.
+- Items are grouped by profession with collapsible headings, and a minimum-quality filter.
+- Cooking, First Aid and Fishing are hidden unless you tick "Show secondary professions".
+- The crafter column names the crafter ("you", "Nokk", "3 crafters") instead of "1 craft".
+- Wanted posts take an amount and a price each ("100x Copper Bar - 3g each").
+- Soulbound and quest items can't be listed any more.
+- Craft requests and whispers reach players on your own realm.
+- The window says "syncing with your guild..." while profiles arrive, and shows last session's data meanwhile.
+- /gh status shows messages sent and received, and how many profiles are stored.
+
 ## 0.2.0-beta1
 
 The first beta for WoW: Forever. Guildhall is now part of **YippYapp**, a set of addons for Forever that work
@@ -11,7 +26,6 @@ even better together.
   categories; opening one only adds recipes the built-in data doesn't know yet.
 - Built-in recipe data from the game: required skill, reagents, yield and crafting station (including camp
   stations like the Master Forge) show in Browse and on craft requests, even before anyone has shared them.
-- Messages to guildies wait while the game locks addon chat, and go out once it lifts.
 - No more "blocked from an action only available to the Blizzard UI" pop-ups. Guildhall no longer asks the game
   for the guild roster or for protected profession info.
 - Sync protocol 2: not compatible with 0.1.0. Guildies need this version to see each other.

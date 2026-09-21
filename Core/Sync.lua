@@ -31,31 +31,20 @@ local versionNudged = false
 
 local function join(...) return table.concat({ ... }, "\t") end
 
--- Messages held back while chat messaging lockdown blocks addon chat; flushed when it lifts.
-local held = {}
-local MAX_HELD = 60
-
-local function FlushHeld()
-    if GH.InChatLockdown() or #held == 0 then return end
-    local queue = held
-    held = {}
-    for _, m in ipairs(queue) do
-        Sync:SendCommMessage(PREFIX, m.text, m.dist, m.target, m.prio)
-    end
-end
+-- Addon messages are NOT part of the chat messaging lockdown: C_ChatInfo.SendAddonMessage carries no
+-- such restriction in the API docs (only "no secret values"); the lockdown silences real chat.
+-- Guildhall used to queue every message while it was on, and then never send them.
+Sync.stats = { sent = 0, received = 0 }
 
 function Sync.Send(header, body, dist, target, prio)
     if not IsInGuild() then return end
     local text = body and (header .. "\n" .. body) or header
     prio = prio or "NORMAL"
-    if GH.InChatLockdown() then
-        if #held < MAX_HELD then held[#held + 1] = { text = text, dist = dist, target = target, prio = prio } end
-        return
-    end
+    -- Whispers go to the name the server knows (no realm suffix on our own realm).
+    if dist == "WHISPER" then target = GH.WhisperName(target) end
+    Sync.stats.sent = Sync.stats.sent + 1
     Sync:SendCommMessage(PREFIX, text, dist, target, prio)
 end
-
-C_Timer.NewTicker(10, FlushHeld)
 
 local function RateLimited(kind, sender, seconds)
     local k = kind .. sender
@@ -66,6 +55,26 @@ local function RateLimited(kind, sender, seconds)
 end
 
 local function Jitter(lo, hi) return lo + math.random() * (hi - lo) end
+
+-- How many guildies with Guildhall have answered so far.
+function Sync.PeerCount()
+    local n = 0
+    for full in pairs(Sync.peers) do if GH.IsOnline(full) then n = n + 1 end end
+    return n
+end
+
+-- Guildhall is "syncing" from login until the first round of profiles has had time to arrive.
+-- The UI shows that instead of pretending the guild has shared nothing.
+Sync.syncing = false
+local function SetSyncing(on)
+    if Sync.syncing == on then return end
+    Sync.syncing = on
+    GH.Fire("SYNC_STATE")
+end
+
+function Sync.DoneSoon(seconds)
+    C_Timer.After(seconds or 25, function() SetSyncing(false) end)
+end
 
 -- ---------------------------------------------------------------------------
 -- Versions
@@ -98,7 +107,7 @@ local function HeldProfile(owner)
     local g = GH.GuildDB()
     local p = g and g.members[owner]
     local alt = GH.DB().chars[owner]
-    if alt and owner ~= GH.Me() and GH.IsGuildie(owner) and (not p or (alt.rev or 0) >= (p.rev or 0)) then
+    if alt and owner ~= GH.Me() and GH.KnownGuildie(owner) and (not p or (alt.rev or 0) >= (p.rev or 0)) then
         return alt
     end
     return p
@@ -108,7 +117,8 @@ local function StoreProfile(p, sender)
     local g = GH.GuildDB()
     if not g or not p.owner then return end
     if p.owner == GH.Me() then return end
-    if GH.rosterComplete and not GH.IsGuildie(p.owner) then return end
+    -- With a roster we can tell strangers apart; without one, the guild channel vouches for them.
+    if GH.rosterComplete and not GH.KnownGuildie(p.owner) then return end
     local direct = (p.owner == sender)
     local cur = g.members[p.owner]
     if cur then
@@ -116,6 +126,7 @@ local function StoreProfile(p, sender)
         if not direct and p.rev <= (cur.rev or 0) then return end
     end
     p.received = GH.Now()
+    p.stale = nil
     p.via = (not direct) and sender or nil
     g.members[p.owner] = p
     pendingGet[p.owner] = nil
@@ -133,7 +144,9 @@ local function NoteRev(owner, rev)
     if cur and (cur.rev or 0) >= rev and not cur.via then return end
     if pendingGet[owner] then return end
     pendingGet[owner] = true
-    C_Timer.After(Jitter(1, 8), function()
+    -- A handful of guildies online can all answer at once; spread it out in bigger guilds.
+    local wait = Sync.PeerCount() < 10 and Jitter(0.5, 2) or Jitter(1, 8)
+    C_Timer.After(wait, function()
         Sync.Send(join("GET", PROTO), nil, "WHISPER", owner)
     end)
     C_Timer.After(90, function() pendingGet[owner] = nil end)
@@ -143,6 +156,8 @@ function Sync.Hello()
     local d = GH.MyData()
     if not d or not IsInGuild() or not GH.GuildDB() then return end
     helloSent = true
+    SetSyncing(true)
+    Sync.DoneSoon(25)
     Sync.Send(join("HI", PROTO, GH.VERSION, d.rev), nil, "GUILD")
     GH.dbg("hello sent (rev %d)", d.rev)
 end
@@ -163,7 +178,7 @@ H.HI = function(f, _, sender)
     NoteRev(sender, tonumber(f[4]))
     local d = GH.MyData()
     if d and helloSent then
-        C_Timer.After(Jitter(2, 12), function()
+        C_Timer.After(Sync.PeerCount() < 10 and Jitter(0.5, 3) or Jitter(2, 12), function()
             Sync.Send(join("YO", PROTO, GH.VERSION, d.rev), nil, "WHISPER", sender)
         end)
     end
@@ -199,7 +214,7 @@ H.MQ = function(_, _, sender)
         if seen[owner] or owner == sender or owner == GH.Me() then return end
         seen[owner] = true
         local p = HeldProfile(owner)
-        if p and GH.IsGuildie(owner) then lines[#lines + 1] = join(owner, p.rev or 0) end
+        if p and GH.KnownGuildie(owner) then lines[#lines + 1] = join(owner, p.rev or 0) end
     end
     for owner in pairs(g.members) do add(owner) end
     for owner in pairs(GH.DB().chars) do add(owner) end
@@ -215,7 +230,7 @@ H.MF = function(_, body, sender)
     for line in (body .. "\n"):gmatch("(.-)\n") do
         local owner, rev = strsplit("\t", line)
         rev = tonumber(rev)
-        if owner and rev and owner ~= GH.Me() and GH.IsGuildie(owner) and not GH.IsOnline(owner) then
+        if owner and rev and owner ~= GH.Me() and GH.KnownGuildie(owner) and not GH.IsOnline(owner) then
             local cur = g.members[owner]
             if not cur or (cur.rev or 0) < rev then want[#want + 1] = owner end
         end
@@ -236,7 +251,7 @@ H.RQ = function(f, _, sender)
         if served >= 80 then break end
         local owner = f[i]
         local p = owner and HeldProfile(owner)
-        if p and GH.IsGuildie(owner) then
+        if p and GH.KnownGuildie(owner) then
             served = served + 1
             Sync.Send(join("PRO", PROTO), C.EncodeProfile(p, p.listings, p.wants), "WHISPER", sender, "BULK")
         end
@@ -250,11 +265,12 @@ function Sync.Handle(kind, fn) H[kind] = fn end
 
 function Sync:OnCommReceived(prefix, message, dist, sender)
     if prefix ~= PREFIX then return end
+    Sync.stats.received = Sync.stats.received + 1
     sender = GH.FullName(sender)
     if not sender or sender == GH.Me() then return end
     if dist ~= "GUILD" and dist ~= "WHISPER" then return end
     -- Whispers can come from anyone; only guildies get an answer.
-    if dist == "WHISPER" and not GH.IsGuildie(sender) then return end
+    if dist == "WHISPER" and not GH.KnownGuildie(sender) then return end
 
     local header, body = message:match("^([^\n]*)\n?(.*)$")
     if not header then return end
@@ -272,12 +288,26 @@ function Sync:OnCommReceived(prefix, message, dist, sender)
 end
 Sync:RegisterComm(PREFIX)
 
+-- AceComm registers the prefix itself; doing it again is harmless and lets /gh status show whether
+-- the server accepted it.
+GH.Listen("LOGIN", function()
+    if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
+        Sync.prefixRegistered = C_ChatInfo.RegisterAddonMessagePrefix(PREFIX)
+    end
+end)
+
 -- ---------------------------------------------------------------------------
 -- Lifecycle
 -- ---------------------------------------------------------------------------
+-- The guild addon channel works without the roster, so don't wait for it.
+GH.Listen("LOGIN", function()
+    if IsInGuild() then C_Timer.After(Jitter(2, 6), Sync.Hello) end
+end)
+
 GH.Listen("ROSTER", function(first)
+    -- Backstop: if the roster turns up before we said hello (rare), say it now.
     if first and not helloSent then
-        C_Timer.After(Jitter(5, 12), Sync.Hello)
+        C_Timer.After(Jitter(2, 6), Sync.Hello)
     end
     -- Forget guildies who left (only when the roster includes offline members).
     local g = GH.GuildDB()
@@ -298,9 +328,16 @@ GH.Listen("ROSTER", function(first)
     end
 end)
 
+-- Profiles saved last session are shown right away, marked until a fresh copy arrives.
+GH.Listen("LOGIN", function()
+    for _, g in pairs(GH.DB().guilds) do
+        for _, p in pairs(g.members or {}) do p.stale = true end
+    end
+end)
+
 GH.Listen("GUILD_CHANGED", function()
     if IsInGuild() and not helloSent then
-        C_Timer.After(Jitter(5, 12), function()
+        C_Timer.After(Jitter(2, 6), function()
             if GH.rosterReady then Sync.Hello() end
         end)
     elseif not IsInGuild() then
@@ -333,6 +370,20 @@ function GH.PrintStatus()
     local peers = 0
     for full in pairs(Sync.peers) do if GH.IsOnline(full) then peers = peers + 1 end end
     local d = GH.MyData()
-    GH.msg("v%s, %d guildie profiles stored (%d relayed), %d online with Guildhall. Your rev: %d.",
-        GH.VERSION, members, relays, peers, d and d.rev or 0)
+    GH.msg("v%s, %s stored (%d relayed), %d online with Guildhall. Your rev: %d.",
+        GH.VERSION, GH.Count(members, "guildie profile"), relays, peers, d and d.rev or 0)
+    local roster = 0
+    for _ in pairs(GH.roster) do roster = roster + 1 end
+    GH.msg("messages sent %d, received %d; prefix registered: %s; chat lockdown: %s.",
+        Sync.stats.sent, Sync.stats.received, tostring(Sync.prefixRegistered), tostring(GH.InChatLockdown()))
+    local oldest
+    for _, p in pairs(g.members) do
+        if p.received and (not oldest or p.received < oldest) then oldest = p.received end
+    end
+    GH.msg("stored profiles: %d%s.", members, oldest and (" (oldest seen " .. GH.Ago(oldest) .. ")") or "")
+    if roster == 0 then
+        GH.msg("roster: 0 members - it fills in when the client provides it; sharing works without it.")
+    else
+        GH.msg("roster: %s.", GH.Count(roster, "member"))
+    end
 end

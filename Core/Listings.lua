@@ -20,6 +20,11 @@ function L.Add(link, count, note)
     if not id then return false, "That isn't an item." end
     local have = GH.API.GetItemCount(id, true) or 0
     if have == 0 then return false, "You don't have that item in your bags or bank." end
+    local blocked = C.UntradableType(id)
+    if blocked == "quest" then return false, "Quest items can't be traded." end
+    if blocked == "bop" or C.IsBoundInBags(id) then
+        return false, "That one is soulbound, so it can't be traded."
+    end
     count = math.max(1, math.min(tonumber(count) or have, have))
     note = C.Clean(note)
 
@@ -62,10 +67,21 @@ function L.Publishable()
     return out
 end
 
+-- "100x Copper Bar - 3g each (300g total)" for a wanted post; the name is passed in.
+function L.WantText(w, name)
+    local qty = w.qty or 1
+    local text = ("%dx %s"):format(qty, name or "?")
+    if (w.price or 0) > 0 then
+        text = text .. (" - %s each"):format(GH.Money(w.price))
+        if qty > 1 then text = text .. (" (%s total)"):format(GH.Money(w.price * qty)) end
+    end
+    return text
+end
+
 -- ---------------------------------------------------------------------------
 -- Wanted posts
 -- ---------------------------------------------------------------------------
-function L.AddWant(linkOrKey, note)
+function L.AddWant(linkOrKey, note, qty, price)
     local d = GH.MyData()
     if not d then return false end
     local item
@@ -74,11 +90,18 @@ function L.AddWant(linkOrKey, note)
     else
         item = C.ItemStringFromLink(linkOrKey)
     end
-    if not C.ItemIdFromString(item) then return false, "That isn't an item." end
+    local id = C.ItemIdFromString(item)
+    if not id then return false, "That isn't an item." end
+    -- Only the item type is known here (there's no copy to look at), so block what can never be traded.
+    local blocked = C.UntradableType(id)
+    if blocked == "quest" then return false, "Quest items can't be traded, so nobody could hand you one." end
+    if blocked == "bop" then return false, "Soulbound items can't be traded, so nobody could hand you one." end
     note = C.Clean(note)
+    qty = math.max(1, math.min(math.floor(tonumber(qty) or 1), 9999))
+    price = math.max(0, math.min(math.floor(tonumber(price) or 0), 99999999))
     for _, w in ipairs(d.wants) do
         if C.ItemIdFromString(w.item) == C.ItemIdFromString(item) then
-            w.note, w.posted = note, GH.Now()
+            w.note, w.posted, w.qty, w.price = note, GH.Now(), qty, price
             GH.BumpRev("wants")
             return true
         end
@@ -86,7 +109,7 @@ function L.AddWant(linkOrKey, note)
     if #d.wants >= C.MAX_WANTS then
         return false, ("You can have at most %d wanted posts."):format(C.MAX_WANTS)
     end
-    table.insert(d.wants, { id = GH.NextId(), item = item, note = note, posted = GH.Now() })
+    table.insert(d.wants, { id = GH.NextId(), item = item, note = note, posted = GH.Now(), qty = qty, price = price })
     GH.BumpRev("wants")
     return true
 end

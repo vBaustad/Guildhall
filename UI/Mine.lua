@@ -23,8 +23,8 @@ local function UpdateComposer()
         c.itemInfo:SetText(offer and "|cff8a8a8aDrag an item here, or shift-click one in your bags.|r"
             or "|cff8a8a8aDrag or shift-click an item, or use \"I want this\" in Browse.|r")
     end
-    c.countLabel:SetShown(offer)
-    c.count:SetShown(offer)
+    c.priceLabel:SetShown(not offer)
+    c.price:SetShown(not offer)
     c.post:SetText(offer and "List it" or "Post wanted")
     c.post:SetEnabled(composer.key ~= nil)
 end
@@ -34,8 +34,9 @@ local function SetComposerItem(link)
     if type(key) ~= "number" then return end
     composer.link, composer.key = link, key
     if view then
+        -- Offers default to everything you have; wanted posts start at one.
         local have = GH.API.GetItemCount(key, true) or 0
-        view.composer.count:SetNumber(math.max(1, have))
+        view.composer.count:SetNumber(composer.mode == "offer" and math.max(1, have) or 1)
     end
     UpdateComposer()
 end
@@ -45,6 +46,7 @@ local function ClearComposer()
     if view then
         view.composer.note:SetText("")
         view.composer.count:SetText("")
+        view.composer.price:SetText("")
     end
     UpdateComposer()
 end
@@ -93,7 +95,8 @@ local function RefreshProfessions()
             if gathering[id] then
                 row.status:SetText("|cff8a8a8agathering - skill shared|r")
             elseif GH.Scan.HasStaticRecipes(id) or p.recipes then
-                row.status:SetText(("|cff60d060%d recipes shared|r"):format(GH.Scan.CountSet(p.recipes)))
+                row.status:SetText(("|cff60d060%s shared|r"):format(
+                    GH.Count(GH.Scan.CountSet(p.recipes), "recipe")))
             else
                 -- No built-in data for this profession: only its window can tell which recipes you know.
                 row.status:SetText("|cffffb040open your " .. name .. " window once to share recipes|r")
@@ -177,7 +180,7 @@ local function Build(f)
     local comp = U.Inset(right)
     comp:SetPoint("TOPLEFT")
     comp:SetPoint("TOPRIGHT")
-    comp:SetHeight(118)
+    comp:SetHeight(146)
     local c = {}
     f.composer = c
 
@@ -225,11 +228,19 @@ local function Build(f)
     c.countLabel = U.Text(comp, "GameFontNormalSmall")
     c.countLabel:SetPoint("TOPLEFT", 12, -92)
     c.countLabel:SetText("Amount")
-    c.count = U.EditBox(comp, 36, nil, true)
+    c.count = U.EditBox(comp, 44, nil, true)
     c.count:SetPoint("LEFT", c.countLabel, "RIGHT", 8, 0)
 
-    c.note = U.EditBox(comp, 180, "Note - price, trade terms...")
-    c.note:SetPoint("LEFT", c.count, "RIGHT", 14, 0)
+    -- Wanted posts say what they pay; offers put their price in the note.
+    c.priceLabel = U.Text(comp, "GameFontNormalSmall")
+    c.priceLabel:SetPoint("LEFT", c.count, "RIGHT", 16, 0)
+    c.priceLabel:SetText("Gold each")
+    c.price = U.EditBox(comp, 52, nil, true)
+    c.price:SetPoint("LEFT", c.priceLabel, "RIGHT", 8, 0)
+    U.Tooltip(c.price, "Gold each", "What you'll pay per item. Leave it empty to just ask for it.")
+
+    c.note = U.EditBox(comp, 260, "Note - trade terms, where to meet...")
+    c.note:SetPoint("TOPLEFT", c.countLabel, "BOTTOMLEFT", 2, -10)
     c.note:SetMaxLetters(C.NOTE_LEN)
 
     c.post = U.Button(comp, "List it", 96, 22)
@@ -240,7 +251,8 @@ local function Build(f)
         if composer.mode == "offer" then
             ok, err = L.Add(composer.link, c.count:GetNumber(), c.note:GetText())
         else
-            ok, err = L.AddWant(composer.key, c.note:GetText())
+            ok, err = L.AddWant(composer.key, c.note:GetText(), c.count:GetNumber(),
+                c.price:GetNumber() * 10000)
         end
         if ok then
             ClearComposer()
@@ -285,8 +297,9 @@ local function Build(f)
                 row.remove:SetScript("OnClick", function() L.Remove(e.id) end)
             else
                 row.tag:SetText("|cff7da5ffWant|r")
-                row.name:SetText(name)
-                row.note:SetText((e.note ~= "" and e.note or "") .. " |cff6a6a6a" .. GH.Ago(e.posted) .. "|r")
+                row.name:SetText(name .. (" |cffffffffx%d|r"):format(e.qty or 1))
+                local pay = (e.price or 0) > 0 and ("|cffffd100" .. GH.Money(e.price) .. " each|r  ") or ""
+                row.note:SetText(pay .. (e.note ~= "" and e.note or "") .. " |cff6a6a6a" .. GH.Ago(e.posted) .. "|r")
                 row.remove:SetScript("OnClick", function() L.RemoveWant(e.id) end)
             end
         end)

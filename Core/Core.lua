@@ -118,6 +118,20 @@ function GH.Short(full)
     return Ambiguate(full, "none")
 end
 
+-- Whispers and addon whispers must use the plain name for someone on our own realm: the server
+-- doesn't know "Name-OurRealm". Names from other realms keep their suffix. Storage and comparisons
+-- always use the full "Name-Realm" form.
+-- LibForever does the same, and its realm match ignores case, spaces, hyphens and apostrophes.
+local LIB = LibStub and LibStub("LibForever-1.0", true)
+local function plainRealm(s) return (s or ""):gsub("[%s%-']", ""):lower() end
+function GH.WhisperName(full)
+    if not full then return nil end
+    if LIB and LIB.WhisperName then return LIB.WhisperName(full) end
+    local name, realm = full:match("^(.-)%-(.+)$")
+    if not name then return full end
+    return plainRealm(realm) == plainRealm(GH.Realm()) and name or full
+end
+
 function GH.ClassColor(classFile)
     local c = classFile and RAID_CLASS_COLORS and RAID_CLASS_COLORS[classFile]
     if not c then return "ffcccccc" end
@@ -128,6 +142,23 @@ end
 -- Class-coloured short name.
 function GH.ColorName(full, classFile)
     return "|c" .. GH.ClassColor(classFile) .. GH.Short(full) .. "|r"
+end
+
+-- "1 recipe" / "5 recipes". Pass the plural when it isn't just an added s.
+function GH.Count(n, singular, plural)
+    return ("%d %s"):format(n, n == 1 and singular or (plural or singular .. "s"))
+end
+
+-- Copper as short gold/silver/copper: "3g", "3g 50s", "45s 20c".
+function GH.Money(copper)
+    copper = math.max(0, math.floor(tonumber(copper) or 0))
+    if copper == 0 then return "free" end
+    local g, s, c = math.floor(copper / 10000), math.floor(copper % 10000 / 100), copper % 100
+    local parts = {}
+    if g > 0 then parts[#parts + 1] = g .. "g" end
+    if s > 0 then parts[#parts + 1] = s .. "s" end
+    if c > 0 then parts[#parts + 1] = c .. "c" end
+    return table.concat(parts, " ")
 end
 
 function GH.Ago(t)
@@ -163,13 +194,11 @@ function GH.DB()
     db.reagents = db.reagents or {}
     db.notified = db.notified or {}
     db.outputs = db.outputs or {}    -- [recipeSpellID] = crafted itemID, for recipes not in the static data
-    -- Data version 2: recipes are stored as recipe spell IDs (v1 stored crafted item IDs).
-    -- Old profiles can't be converted, so drop them; they are rebuilt on the next scan / sync.
-    if (db.dataVersion or 1) < 2 then
-        for _, d in pairs(db.chars) do d.profs = {} end
-        for _, g in pairs(db.guilds) do g.members = {} end
-        db.dataVersion = 2
-    end
+    -- Data version 2 (recipe spell IDs instead of crafted item IDs) has been the only format all
+    -- through the beta, so nothing is wiped here any more: a wipe on a table that merely looks
+    -- unversioned would throw away every guildie profile. Old v1 profiles are simply replaced as
+    -- their owners publish again.
+    db.dataVersion = 2
     return db
 end
 
@@ -242,6 +271,14 @@ function GH.IsOnline(full)
     if full == GH.Me() then return true end
     local r = GH.roster[full]
     return r and r.online or false
+end
+
+-- The roster can be empty for a long time (we never request it), so anyone who talked to us on the
+-- guild addon channel counts as a guildie too: only guildies can reach it.
+function GH.KnownGuildie(full)
+    if not full then return false end
+    if GH.roster[full] then return true end
+    return GH.Sync and GH.Sync.peers[full] ~= nil
 end
 
 function GH.IsGuildie(full)

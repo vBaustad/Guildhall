@@ -16,6 +16,50 @@ API.RequestItem = C_Item.RequestLoadItemDataByID
 API.SpellName = C_Spell.GetSpellName
 API.SpellTexture = C_Spell.GetSpellTexture
 
+-- ---------------------------------------------------------------------------
+-- Can it be handed over at all?
+-- ---------------------------------------------------------------------------
+-- Quest items and items that bind when you pick them up can never reach a guildie.
+-- Bind-on-equip gear that is already worn (soulbound) can't either, but only the copy in your bags
+-- knows that, so it is checked separately.
+local QUEST_CLASS = 12
+
+-- "quest" / "bop" / nil, from the item type alone (no bag instance needed).
+function C.UntradableType(id)
+    if not id then return nil end
+    local _, _, _, _, _, classID = API.GetItemInfoInstant(id)
+    if classID == QUEST_CLASS then return "quest" end
+    local bind = select(14, API.GetItemInfo(id))
+    if bind == 1 then return "bop" end
+    return nil
+end
+
+-- The first copy of the item in your bags, as bag, slot, info.
+function C.FindInBags(id)
+    if not (C_Container and C_Container.GetContainerNumSlots) then return nil end
+    for bag = 0, (NUM_BAG_SLOTS or 4) do
+        for slot = 1, (C_Container.GetContainerNumSlots(bag) or 0) do
+            local info = C_Container.GetContainerItemInfo(bag, slot)
+            if info and info.itemID == id then return bag, slot, info end
+        end
+    end
+end
+
+-- Is the copy in your bags soulbound? Uses the item's own tooltip, which is the only place a
+-- bind-on-equip item that has been worn says so.
+function C.IsBoundInBags(id)
+    local bag, slot, info = C.FindInBags(id)
+    if not bag then return false end
+    if info and info.isBound ~= nil then return info.isBound and true or false end
+    if not (C_TooltipInfo and C_TooltipInfo.GetBagItem) then return false end
+    local data = C_TooltipInfo.GetBagItem(bag, slot)
+    for _, line in ipairs(data and data.lines or {}) do
+        local text = line.leftText
+        if type(text) == "string" and (text == ITEM_SOULBOUND or text == ITEM_BIND_ON_PICKUP) then return true end
+    end
+    return false
+end
+
 C.MAX_PROFS = 16
 C.MAX_RECIPES = 1200
 C.MAX_LISTINGS = 40
@@ -204,7 +248,7 @@ end
 --   P  owner  rev  class  level
 --   F  skillLineID  rank  max  scanned36  recipes (comma separated base36 recipe spell IDs, or "-" for none)
 --   L  id  itemString  count  posted36  note
---   W  id  itemString  posted36  note
+--   W  id  itemString  posted36  note  qty  copperEach   (qty/price appended later; may be missing)
 -- ---------------------------------------------------------------------------
 local function join(...) return table.concat({ ... }, "\t") end
 
@@ -236,7 +280,8 @@ function C.EncodeProfile(p, listings, wants)
     end
     for i, w in ipairs(wants or {}) do
         if i > C.MAX_WANTS then break end
-        lines[#lines + 1] = join("W", tostring(w.id), w.item, C.To36(w.posted or 0), C.Clean(w.note))
+        lines[#lines + 1] = join("W", tostring(w.id), w.item, C.To36(w.posted or 0), C.Clean(w.note),
+            tostring(w.qty or 1), tostring(w.price or 0))
     end
     return table.concat(lines, "\n")
 end
@@ -286,6 +331,8 @@ function C.DecodeProfile(text)
             if item then
                 p.wants[#p.wants + 1] = {
                     id = tonumber(f[2]) or 0, item = item, posted = C.From36(f[4]) or 0, note = C.Clean(f[5]),
+                    qty = math.max(1, math.min(tonumber(f[6]) or 1, 9999)),
+                    price = math.max(0, math.min(tonumber(f[7]) or 0, 99999999)),
                 }
             end
         end
