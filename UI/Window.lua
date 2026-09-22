@@ -21,7 +21,7 @@ local function RefreshActive()
     -- Header status line
     local guild = GH.GuildName()
     if not guild then
-        win.status:SetText("|cffff6060Not in a guild|r")
+        win.status:SetText("|cff8a8a8aNot in a guild|r")
     else
         local g = GH.GuildDB()
         local n = 0
@@ -38,8 +38,8 @@ local function RefreshActive()
         end
         win.status:SetText(("|c%s<%s>|r  |cff8a8a8a%s|r"):format(GH.CREAM, guild, shared))
     end
-    local newCount = GH.Orders.NewCount()
-    win.tabs:SetLabel("requests", newCount > 0 and ("Requests |cffff6060(" .. newCount .. ")|r") or "Requests")
+    local todo = GH.Orders.NewCount() + #GH.Index.WantsICanMake()
+    win.tabs:SetLabel("requests", todo > 0 and ("Requests |cffff6060(" .. todo .. ")|r") or "Requests")
 end
 
 function GH.RefreshWindow()

@@ -287,57 +287,72 @@ function C.EncodeProfile(p, listings, wants)
 end
 
 -- Returns a profile table, or nil if the payload is malformed.
+-- Returns a profile table, or nil if the payload is malformed. Strict on purpose: a multi-part
+-- message with a refused middle part arrives glued together and corrupt, and a half-read profile
+-- must never replace a good stored one. One bad line rejects the whole profile.
+local function Int(s) return s and s:match("^%d+$") and tonumber(s) or nil end
+local function B36(s) return s and s:match("^[%w]+$") and tonumber(s, 36) or nil end
+
 function C.DecodeProfile(text)
-    if type(text) ~= "string" then return nil end
+    if type(text) ~= "string" or text == "" then return nil end
     local p = { profs = {}, listings = {}, wants = {} }
-    local nprof = 0
+    local nprof, header = 0, 0
     for line in (text .. "\n"):gmatch("(.-)\n") do
-        local f = { strsplit("\t", line) }
-        local kind = f[1]
-        if kind == "P" then
-            p.owner = f[2]
-            p.rev = tonumber(f[3])
-            p.class = (f[4] ~= "" and f[4]) or nil
-            p.level = tonumber(f[5])
-        elseif kind == "F" and nprof < C.MAX_PROFS then
-            local skillLine = tonumber(f[2])
-            if skillLine then
+        if line ~= "" then
+            local f = { strsplit("\t", line) }
+            local kind = f[1]
+            if kind == "P" then
+                header = header + 1
+                p.owner = f[2]
+                p.rev = Int(f[3])
+                p.class = (f[4] ~= "" and f[4]) or nil
+                p.level = Int(f[5])
+                if not (p.owner and p.owner:match("^[^%-%s][^%-]*%-.+$") and p.rev and #f == 5) then return nil end
+            elseif kind == "F" then
+                local skillLine, rank, max = Int(f[2]), Int(f[3]), Int(f[4])
+                if not (skillLine and rank and max and B36(f[5]) and f[6] and #f == 6) then return nil end
                 nprof = nprof + 1
-                local prof = { rank = tonumber(f[3]) or 0, max = tonumber(f[4]) or 0, scanned = C.From36(f[5]) or 0 }
-                if f[6] and f[6] ~= "-" then
+                if nprof > C.MAX_PROFS then return nil end
+                local prof = { rank = rank, max = max, scanned = B36(f[5]) }
+                if f[6] ~= "-" then
                     prof.recipes = {}
                     local n = 0
-                    for w in f[6]:gmatch("[^,]+") do
-                        local spellID = C.From36(w)
-                        if spellID then
+                    for w in f[6]:gmatch("[^,]*") do
+                        if w ~= "" then
+                            local spellID = B36(w)
+                            if not spellID then return nil end
                             n = n + 1
-                            if n > C.MAX_RECIPES then break end
+                            if n > C.MAX_RECIPES then return nil end
                             prof.recipes[spellID] = true
                         end
                     end
                 end
                 p.profs[skillLine] = prof
-            end
-        elseif kind == "L" and #p.listings < C.MAX_LISTINGS then
-            local item = C.ItemStringFromLink(f[3])
-            if item then
+            elseif kind == "L" then
+                local item = C.ItemStringFromLink(f[3])
+                if not (Int(f[2]) and item and Int(f[4]) and B36(f[5]) and #f == 6) then return nil end
+                if #p.listings >= C.MAX_LISTINGS then return nil end
                 p.listings[#p.listings + 1] = {
-                    id = tonumber(f[2]) or 0, item = item, count = math.max(1, tonumber(f[4]) or 1),
-                    posted = C.From36(f[5]) or 0, note = C.Clean(f[6]),
+                    id = Int(f[2]), item = item, count = math.max(1, Int(f[4])),
+                    posted = B36(f[5]), note = C.Clean(f[6]),
                 }
-            end
-        elseif kind == "W" and #p.wants < C.MAX_WANTS then
-            local item = C.ItemStringFromLink(f[3])
-            if item then
+            elseif kind == "W" then
+                -- qty and price were added later: 5 fields from older clients, 7 from newer ones.
+                local item = C.ItemStringFromLink(f[3])
+                if not (Int(f[2]) and item and B36(f[4]) and (#f == 5 or #f == 7)) then return nil end
+                if #f == 7 and not (Int(f[6]) and Int(f[7])) then return nil end
+                if #p.wants >= C.MAX_WANTS then return nil end
                 p.wants[#p.wants + 1] = {
-                    id = tonumber(f[2]) or 0, item = item, posted = C.From36(f[4]) or 0, note = C.Clean(f[5]),
-                    qty = math.max(1, math.min(tonumber(f[6]) or 1, 9999)),
-                    price = math.max(0, math.min(tonumber(f[7]) or 0, 99999999)),
+                    id = Int(f[2]), item = item, posted = B36(f[4]), note = C.Clean(f[5]),
+                    qty = math.max(1, math.min(Int(f[6]) or 1, 9999)),
+                    price = math.max(0, math.min(Int(f[7]) or 0, 99999999)),
                 }
+            else
+                return nil   -- unknown record: most likely two messages glued together
             end
         end
     end
-    if not p.owner or not p.rev then return nil end
+    if header ~= 1 then return nil end
     return p
 end
 

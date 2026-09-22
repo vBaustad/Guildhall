@@ -34,16 +34,50 @@ local function join(...) return table.concat({ ... }, "\t") end
 -- Addon messages are NOT part of the chat messaging lockdown: C_ChatInfo.SendAddonMessage carries no
 -- such restriction in the API docs (only "no secret values"); the lockdown silences real chat.
 -- Guildhall used to queue every message while it was on, and then never send them.
-Sync.stats = { sent = 0, received = 0 }
+-- The client can still refuse a message (Enum.SendAddonMessageResult, e.g. in restricted content);
+-- that only shows after the fact, per chunk. Count it, and send lockdown refusals again once the
+-- restriction changes.
+Sync.stats = { sent = 0, received = 0, refused = {} }
+local RESULT = Enum and Enum.SendAddonMessageResult or {}
+local RESULT_NAME = {}
+for name, value in pairs(RESULT) do RESULT_NAME[value] = name end
+local LOCKDOWN = RESULT.AddOnMessageLockdown or 11
+local retry = {}
+local MAX_RETRY = 30
+
+local function Dispatch(m)
+    Sync:SendCommMessage(PREFIX, m.text, m.dist, m.target, m.prio, function(msg, sent, bytes, result)
+        if not sent and not msg.refusal then msg.refusal = result or -1 end
+        if (bytes or 0) < #msg.text then return end   -- not the last chunk yet
+        if not msg.refusal then
+            Sync.stats.sent = Sync.stats.sent + 1
+            return
+        end
+        local reason = RESULT_NAME[msg.refusal] or tostring(msg.refusal)
+        Sync.stats.refused[reason] = (Sync.stats.refused[reason] or 0) + 1
+        if msg.refusal == LOCKDOWN and #retry < MAX_RETRY then
+            msg.refusal = nil
+            retry[#retry + 1] = msg
+        end
+    end, m)
+end
 
 function Sync.Send(header, body, dist, target, prio)
     if not IsInGuild() then return end
     local text = body and (header .. "\n" .. body) or header
-    prio = prio or "NORMAL"
     -- Whispers go to the name the server knows (no realm suffix on our own realm).
     if dist == "WHISPER" then target = GH.WhisperName(target) end
-    Sync.stats.sent = Sync.stats.sent + 1
-    Sync:SendCommMessage(PREFIX, text, dist, target, prio)
+    Dispatch({ text = text, dist = dist, target = target, prio = prio or "NORMAL" })
+end
+
+local function FlushRetry()
+    if #retry == 0 then return end
+    local queue = retry
+    retry = {}
+    for _, m in ipairs(queue) do Dispatch(m) end
+end
+if not C_EventUtils or not C_EventUtils.IsEventValid or C_EventUtils.IsEventValid("ADDON_RESTRICTION_STATE_CHANGED") then
+    GH.On("ADDON_RESTRICTION_STATE_CHANGED", function() GH.Debounce("commRetry", 1, FlushRetry) end)
 end
 
 local function RateLimited(kind, sender, seconds)
@@ -374,8 +408,14 @@ function GH.PrintStatus()
         GH.VERSION, GH.Count(members, "guildie profile"), relays, peers, d and d.rev or 0)
     local roster = 0
     for _ in pairs(GH.roster) do roster = roster + 1 end
-    GH.msg("messages sent %d, received %d; prefix registered: %s; chat lockdown: %s.",
-        Sync.stats.sent, Sync.stats.received, tostring(Sync.prefixRegistered), tostring(GH.InChatLockdown()))
+    local refused, parts = 0, {}
+    for reason, n in pairs(Sync.stats.refused) do
+        refused = refused + n
+        parts[#parts + 1] = ("%s %d"):format(reason, n)
+    end
+    GH.msg("messages sent %d, received %d, refused %d%s, waiting %d; prefix registered: %s.",
+        Sync.stats.sent, Sync.stats.received, refused,
+        #parts > 0 and (" (" .. table.concat(parts, ", ") .. ")") or "", #retry, tostring(Sync.prefixRegistered))
     local oldest
     for _, p in pairs(g.members) do
         if p.received and (not oldest or p.received < oldest) then oldest = p.received end

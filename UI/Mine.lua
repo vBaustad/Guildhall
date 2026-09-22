@@ -122,11 +122,11 @@ local function Refresh()
     end
     view.list:SetData(data)
     view.listEmpty:SetShown(#data == 0)
-    if not GH.GuildDB() then
-        view.guildNote:SetText("|cffff6060You're not in a guild - nothing is being shared.|r")
-    else
-        view.guildNote:SetText("")
-    end
+    -- Your professions are scanned either way; offering and asking only mean something in a guild.
+    local inGuild = GH.GuildDB() ~= nil
+    view.right:SetShown(inGuild)
+    view.noGuild:SetShown(not inGuild)
+    view.guildNote:SetText(inGuild and "" or "|cff8a8a8aNot in a guild - nothing is being shared yet.|r")
 end
 
 -- ---------------------------------------------------------------------------
@@ -176,6 +176,18 @@ local function Build(f)
     local right = CreateFrame("Frame", nil, f)
     right:SetPoint("TOPLEFT", left, "TOPRIGHT", 12, 0)
     right:SetPoint("BOTTOMRIGHT", 0, 0)
+    f.right = right
+
+    -- Shown in place of the composer and your posts when you're not in a guild.
+    f.noGuild = f:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    f.noGuild:SetPoint("TOPLEFT", left, "TOPRIGHT", 30, -40)
+    f.noGuild:SetPoint("RIGHT", -20, 0)
+    f.noGuild:SetJustifyH("LEFT")
+    f.noGuild:SetSpacing(4)
+    f.noGuild:SetText("Offering items and posting what you want works with your guild.\n\n"
+        .. "|cff8a8a8aJoin a guild and your guildies will see what you can craft, what you have to spare "
+        .. "and what you're looking for.|r")
+    f.noGuild:Hide()
 
     local comp = U.Inset(right)
     comp:SetPoint("TOPLEFT")

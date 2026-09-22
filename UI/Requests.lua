@@ -50,9 +50,27 @@ end
 
 local function Refresh()
     if not view then return end
+    if not GH.GuildDB() then
+        view.list:SetData({})
+        view.empty:SetText("Craft requests work with your guild.\n\n|cff8a8a8aJoin a guild to ask guildies to "
+            .. "craft for you, and to get their requests.|r")
+        view.empty:Show()
+        return
+    end
     local newCount = O.NewCount()
     view.sides:SetLabel("incoming", newCount > 0 and ("For you to craft |cffff6060(" .. newCount .. ")|r") or "For you to craft")
     local data = side == "incoming" and O.Incoming() or O.Outgoing()
+    if side == "incoming" then
+        -- Wanted posts you can craft sit under the direct requests, so they can't be missed.
+        local wants = I.WantsICanMake()
+        if #wants > 0 then
+            local rows = {}
+            for _, o in ipairs(data) do rows[#rows + 1] = o end
+            rows[#rows + 1] = { heading = "Wanted by guildies - you can make these" }
+            for _, w in ipairs(wants) do rows[#rows + 1] = { want = w } end
+            data = rows
+        end
+    end
     view.list:SetData(data)
     if #data == 0 then
         view.empty:SetText(side == "incoming"
@@ -108,6 +126,31 @@ local function Build(f)
         end,
         function(row, o, index)
             row.bg:SetShown(index % 2 == 0)
+            if o.heading then
+                row.icon:Hide()
+                row.title:SetText("|cffe6b34d" .. o.heading .. "|r")
+                row.line2:SetText("|cff8a8a8aGuildies posted these under Wanted, and one of your recipes makes them.|r")
+                row.line3:SetText("")
+                SetButton(row.b1, nil); SetButton(row.b2, nil); SetButton(row.b3, nil)
+                return
+            end
+            row.icon:Show()
+            if o.want then
+                local w = o.want
+                row.icon:SetKey(w.key)
+                row.title:SetText(GH.Listings.WantText(w.w, C.KeyColor(w.key) .. (I.Name(w.key) or "...") .. "|r"))
+                local who = GH.IsOnline(w.owner) and GH.ColorName(w.owner, w.class)
+                    or ("|cff8a8a8a" .. GH.Short(w.owner) .. "|r")
+                local note = (w.w.note and w.w.note ~= "") and ("  |cffbbbbbb\"" .. w.w.note .. "\"|r") or ""
+                row.line2:SetText(("wanted by %s  |cff6a6a6a%s|r%s"):format(who, GH.Ago(w.w.posted), note))
+                row.line3:SetText(("|cff60d060You can make it (%s).|r"):format(w.prof))
+                local online = GH.IsOnline(w.owner)
+                SetButton(row.b1, online and "Whisper" or "Offline", online and function() U.Whisper(w.owner, w.key) end or nil)
+                row.b1:SetEnabled(online)
+                SetButton(row.b2, "Show item", function() GH.ShowWanted(w.key) end)
+                SetButton(row.b3, "I'll make it", function() GH.Listings.OfferWant(w.owner, w.key, w.w) end)
+                return
+            end
             row.icon:SetKey(o.item)
             row.title:SetText(("%s%s|r |cffffffffx%d|r"):format(C.KeyColor(o.item), I.Name(o.item) or "...", o.qty or 1))
             local incoming = side == "incoming"

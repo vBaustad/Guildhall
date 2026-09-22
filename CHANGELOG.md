@@ -1,5 +1,25 @@
 # Guildhall
 
+## 0.2.0-beta3
+
+- **Wanted posts you can craft are easy to find.** The Requests tab lists them under your craft requests
+  ("Wanted by guildies - you can make these") with Whisper and "Show item", the tab shows how many things
+  are waiting for you, and the minimap tooltip counts them too.
+- The chat line about a wanted item has an "[Open in Guildhall]" link that opens it in Browse.
+- "I'll make it" on a guildie's wanted post you can craft opens a whisper that's already written ("I can make
+  [item] for you - 1x for 3g each?"), in Browse and on the Requests tab.
+- Without a guild, Browse shows one clear message instead of empty lists stacked on top of each other, and
+  My Guildhall and Requests explain that offering, wanting and craft requests work with a guild. Joining or
+  leaving a guild switches the window over without a reload.
+- Browse's overview and item list can never show at the same time any more.
+- "I want this" is a quiet link now, and only shows when it makes sense: not for things you can craft, and
+  on your own wanted post it becomes "You want this - remove".
+- Picking "Crafts", "Guildies have" or "Wanted" in Browse now opens the list straight away. Before, the
+  overview stayed up and a wanted post could only be found by searching for it.
+- A profession's item list also shows wanted and offered items that profession makes, not only its crafts.
+- Guildhall notices when the game refuses an addon message (for example in restricted content), sends it
+  again when it can, and never stores a profile that arrived damaged. /gh status shows what was refused.
+
 ## 0.2.0-beta2
 
 - **Guild sharing works.** Messages were held back during the game's chat lockdown, so nothing reached guildies. They're sent straight away now.

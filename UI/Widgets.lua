@@ -260,6 +260,31 @@ function U.Whisper(full, key)
     end
 end
 
+-- Open a whisper with the text already typed in (the player still presses Enter).
+function U.WhisperText(full, text)
+    local target = GH.WhisperName(full) or GH.Short(full)
+    local line = "/w " .. target .. " " .. (text or "")
+    if ChatFrameUtil and ChatFrameUtil.OpenChat then
+        ChatFrameUtil.OpenChat(line)
+    elseif ChatFrame_OpenChat then
+        ChatFrame_OpenChat(line)
+    end
+end
+
+-- A small gold text link, for secondary actions that shouldn't look like the main button.
+function U.LinkButton(parent, text)
+    local b = CreateFrame("Button", nil, parent)
+    b:SetNormalFontObject("GameFontNormalSmall")
+    b:SetHighlightFontObject("GameFontHighlightSmall")
+    b:SetText(text)
+    b:SetSize(b:GetFontString():GetStringWidth() + 4, 16)
+    function b:SetLabel(t)
+        self:SetText(t)
+        self:SetWidth(self:GetFontString():GetStringWidth() + 4)
+    end
+    return b
+end
+
 -- Fixed pool of rows inside a FauxScrollFrame. build(row) makes one; fill(row, data) paints it.
 function U.ScrollList(parent, rowHeight, numRows, build, fill)
     local list = CreateFrame("Frame", nil, parent)

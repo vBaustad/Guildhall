@@ -198,6 +198,12 @@ function I.Search(query, opts)
     local results, loading = {}, 0
 
     local function keep(owner) return not opts.online or GH.IsOnline(owner) end
+    -- With a profession picked, posts still show for the items that profession makes.
+    local function postsFit(key)
+        if not opts.prof then return true end
+        local recipe = I.RecipeInfoFor(key)
+        return recipe and recipe.prof and GH.ProfName(recipe.prof) == opts.prof or false
+    end
 
     for key, e in pairs(index) do
         local name = I.Name(key)
@@ -210,12 +216,12 @@ function I.Search(query, opts)
                     if keep(c.owner) and (not opts.prof or c.prof == opts.prof) then crafters[#crafters + 1] = c end
                 end
             end
-            if not opts.prof and (source == "all" or source == "listings") then
+            if postsFit(key) and (source == "all" or source == "listings") then
                 for _, l in ipairs(e.listings) do
                     if keep(l.owner) then listings[#listings + 1] = l end
                 end
             end
-            if not opts.prof and (source == "all" or source == "wants") then
+            if postsFit(key) and (source == "all" or source == "wants") then
                 for _, w in ipairs(e.wants) do
                     if keep(w.owner) then wants[#wants + 1] = w end
                 end
@@ -229,6 +235,27 @@ function I.Search(query, opts)
     end
     table.sort(results, function(a, b) return a.name < b.name end)
     return results, loading
+end
+
+-- Guildies' wanted posts for things you can craft: { key, owner, class, w, prof }, newest first.
+-- Shown whatever the profession filters say - it's something you can actually do for someone.
+function I.WantsICanMake()
+    if dirty then I.Build() end
+    local me, out = GH.Me(), {}
+    for key, e in pairs(index) do
+        if #e.wants > 0 then
+            local prof = GH.Scan.MyProfessionFor(key)
+            if prof then
+                for _, w in ipairs(e.wants) do
+                    if w.owner ~= me then
+                        out[#out + 1] = { key = key, owner = w.owner, class = w.class, w = w.w, prof = prof }
+                    end
+                end
+            end
+        end
+    end
+    table.sort(out, function(a, b) return (a.w.posted or 0) > (b.w.posted or 0) end)
+    return out
 end
 
 -- Guildies first (online before offline, then by skill and name); you always come last.

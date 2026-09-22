@@ -161,6 +161,24 @@ function GH.Money(copper)
     return table.concat(parts, " ")
 end
 
+-- A clickable "[Open in Guildhall]" for chat lines; clicking it shows the wanted item.
+function GH.WantLink(key)
+    return ("|cffe6b34d|Haddon:Guildhall:want:%s|h[Open in Guildhall]|h|r"):format(tostring(key))
+end
+
+local function OnLink(link)
+    local key = type(link) == "string" and link:match("^addon:Guildhall:want:(.+)$")
+    if not key then return false end
+    if GH.ShowWanted then GH.ShowWanted(tonumber(key) or key) end
+    return true
+end
+-- The modern client hands "addon:" links to EventRegistry; older paths go through SetItemRef.
+if EventRegistry and EventRegistry.RegisterCallback then
+    EventRegistry:RegisterCallback("SetItemRef", function(_, link) OnLink(link) end, GH)
+elseif SetItemRef then
+    hooksecurefunc("SetItemRef", function(link) OnLink(link) end)
+end
+
 function GH.Ago(t)
     if not t or t == 0 then return "never" end
     local d = GH.Now() - t

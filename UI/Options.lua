@@ -146,17 +146,10 @@ GH.RegisterTab("settings", "Settings", Build, Refresh)
 -- Blizzard's Options -> AddOns -> Guildhall: the same page, plus a way into the window.
 local function OpenGuildhallButton(parent)
     local open = U.Button(parent, "Open Guildhall", 130, 22)
-    open:SetScript("OnClick", function()
-        -- The Options panel is protected in combat; leave it open then and say so.
-        if SettingsPanel and SettingsPanel:IsShown() then
-            if InCombatLockdown() then
-                GH.msg("Options can't be closed during combat - Guildhall is open behind it.")
-            else
-                SettingsPanel:Close()
-            end
-        end
-        GH.ShowTab("browse")
-    end)
+    -- Only opens our window. Never close Blizzard's Settings from here: SettingsPanel:Close() goes back
+    -- to the game menu through the protected SpellStopCasting (ADDON_ACTION_FORBIDDEN). LibForever
+    -- lays our window over Settings instead.
+    open:SetScript("OnClick", function() GH.ShowTab("browse") end)
     return open
 end
 

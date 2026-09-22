@@ -160,7 +160,18 @@ local function RenderDetail()
     d.icon:Show()
     d.icon:SetKey(key)
     d.name:SetText(C.KeyColor(key) .. (I.Name(key) or "Loading...") .. "|r")
-    d.wantBtn:SetShown(type(key) == "number")
+    -- No "I want this" for things you can craft yourself; your own post shows as a remove link.
+    local canMake = GH.Scan.MyProfessionFor(key) ~= nil
+    local myWant = type(key) == "number" and GH.Listings.MyWantFor(key)
+    if myWant then
+        d.wantBtn:SetLabel("You want this - remove")
+        d.wantBtn:Show()
+    elseif type(key) == "number" and not canMake then
+        d.wantBtn:SetLabel("I want this")
+        d.wantBtn:Show()
+    else
+        d.wantBtn:Hide()
+    end
 
     local reagents = I.ReagentsFor(key)
     if reagents then
@@ -233,6 +244,7 @@ local function RenderDetail()
             r.tip = { GH.Short(c.owner), ("%s, skill %d"):format(c.prof, c.rank or 0) }
             r.b1:SetShown(not isMe)
             r.b2:SetShown(not isMe)
+            r.b2:SetText("Request")
             r.b1:SetEnabled(GH.IsOnline(c.owner))
             r.b1:SetScript("OnClick", function() U.Whisper(c.owner, key) end)
             r.b2:SetScript("OnClick", function() GH.OpenRequest(c.owner, key) end)
@@ -268,8 +280,15 @@ local function RenderDetail()
                 want.note ~= "" and want.note or nil }
             r.b1:SetShown(not isMe)
             r.b1:SetEnabled(GH.IsOnline(w.owner))
-            r.b2:Hide()
             r.b1:SetScript("OnClick", function() U.Whisper(w.owner, key) end)
+            -- You can craft it: say so in one click (the whisper comes pre-written).
+            if canMake and not isMe then
+                r.b2:SetText("I'll make it")
+                r.b2:SetScript("OnClick", function() GH.Listings.OfferWant(w.owner, key, want) end)
+                r.b2:Show()
+            else
+                r.b2:Hide()
+            end
         end
     end
     content:SetHeight(-y + 8)
@@ -371,16 +390,37 @@ local function ProfessionCards()
 end
 
 -- The item list is for searching and for one profession; otherwise you get the overview.
+-- Picking "Crafts", "Guildies have" or "Wanted" also opens the list: on the overview those filters
+-- had nothing to show them, so a wanted post could only be found by searching for it.
 local function ShowingOverview()
-    return state.query == "" and not state.prof
+    return state.query == "" and not state.prof and state.source == "all"
+end
+
+-- Exactly one of three screens is ever visible: "noguild", "overview" or "items". Every widget
+-- belongs to one or more of them, so two screens can never show at the same time.
+local MODE_WIDGETS = {
+    noguild  = { "noGuild" },
+    overview = { "search", "source", "online", "secondary", "cardBox" },
+    items    = { "search", "source", "online", "profLabel", "back", "quality", "listBox", "detailBox", "loading" },
+}
+
+local function SetMode(mode)
+    if view.mode == mode then return end
+    view.mode = mode
+    local on = {}
+    for _, key in ipairs(MODE_WIDGETS[mode]) do on[key] = true end
+    for _, list in pairs(MODE_WIDGETS) do
+        for _, key in ipairs(list) do
+            if view[key] then view[key]:SetShown(on[key] or false) end
+        end
+    end
+    for _, b in ipairs(view.profButtons) do b:SetShown(mode == "items") end
 end
 
 local function Refresh()
     if not view then return end
     if not GH.GuildDB() then
-        view.list:SetData({})
-        view.loading:SetText("|cffff6060Join a guild to use Guildhall.|r")
-        RenderDetail()
+        SetMode("noguild")
         return
     end
     -- Counts per filter for the same search, so every filter shows what it holds.
@@ -409,14 +449,7 @@ local function Refresh()
     view.results = results
 
     local overview = ShowingOverview()
-    view.cardBox:SetShown(overview)
-    view.listBox:SetShown(not overview)
-    view.detailBox:SetShown(not overview)
-    view.back:SetShown(not overview)
-    view.quality:SetShown(not overview)
-    view.secondary:SetShown(overview)
-    view.profLabel:SetShown(not overview)
-    for _, b in ipairs(view.profButtons) do b:SetShown(not overview) end
+    SetMode(overview and "overview" or "items")
     if overview then
         view.RenderOverview()
         view.loading:SetText("")
@@ -473,6 +506,7 @@ local function Build(f)
     f.source = source
 
     local online = U.Checkbox(f, "Online only")
+    f.online = online
     online:SetPoint("LEFT", source, "RIGHT", 12, 0)
     online:SetScript("OnClick", function(self)
         state.online = self:GetChecked() and true or false
@@ -518,6 +552,16 @@ local function Build(f)
         end
         Refresh()
     end
+
+    -- Without a guild there is nothing to browse: one message instead of empty lists.
+    f.noGuild = f:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    f.noGuild:SetPoint("CENTER", 0, 20)
+    f.noGuild:SetWidth(460)
+    f.noGuild:SetJustifyH("CENTER")
+    f.noGuild:SetSpacing(4)
+    f.noGuild:SetText("Guildhall works with your guild.\n\n|cff8a8a8aJoin a guild to see who can craft what, what "
+        .. "guildies have to spare and what they're looking for.|r")
+    f.noGuild:Hide()
 
     f.loading = U.Text(f, "GameFontHighlightSmall", "RIGHT")
     f.loading:SetPoint("TOPRIGHT", -6, -62)   -- the filter row above it holds the back button
@@ -802,12 +846,19 @@ local function Build(f)
     d.name:SetPoint("RIGHT", -110, 0)
     d.sub = U.Text(detailBox, "GameFontHighlightSmall")
     d.sub:SetPoint("TOPLEFT", d.name, "BOTTOMLEFT", 0, -4)
-    d.wantBtn = U.Button(detailBox, "I want this", 96, 20)
-    d.wantBtn:SetPoint("TOPRIGHT", -10, -12)
-    d.wantBtn:SetScript("OnClick", function()
-        if state.selected and GH.StartWant then GH.StartWant(state.selected) end
+    -- A quiet link, not a main button: only offered when asking the guild makes sense.
+    d.wantBtn = U.LinkButton(detailBox, "I want this")
+    d.wantBtn:SetPoint("TOPRIGHT", -12, -14)
+    d.wantBtn:SetScript("OnClick", function(self)
+        if not state.selected then return end
+        local mine = GH.Listings.MyWantFor(state.selected)
+        if mine then
+            GH.Listings.RemoveWant(mine.id)
+        elseif GH.StartWant then
+            GH.StartWant(state.selected)
+        end
     end)
-    U.Tooltip(d.wantBtn, "Post a wanted note", "Lets the guild know you're looking for this item.")
+    U.Tooltip(d.wantBtn, "Wanted posts", "Lets the guild know you're looking for this item.")
     d.mats = U.Text(detailBox, "GameFontHighlightSmall")
     d.mats:SetPoint("TOPLEFT", 10, -54)
     d.mats:SetPoint("RIGHT", -10, 0)
@@ -827,6 +878,19 @@ local function Build(f)
 end
 
 GH.RegisterTab("browse", "Browse", Build, Refresh)
+
+-- From a chat link or the Requests tab: the Wanted list with this item picked.
+function GH.ShowWanted(key)
+    GH.ShowTab("browse")
+    if not view then return end
+    view.search:SetText("")
+    state.query = ""
+    state.source = "wants"
+    view.source:Select("wants")
+    view.SetProfession(nil)
+    state.selected = key
+    Refresh()
+end
 
 function GH.ShowSearch(text)
     GH.ShowTab("browse")

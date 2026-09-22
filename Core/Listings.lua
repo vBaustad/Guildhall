@@ -78,6 +78,28 @@ function L.WantText(w, name)
     return text
 end
 
+-- "I'll make it": answer a guildie's wanted post. For now it opens a whisper with the item, amount
+-- and price filled in; mail delivery will hang off this same entry point later.
+function L.OfferWant(owner, key, w)
+    local link = GH.Codec.KeyLink(key) or ("item " .. tostring(key))
+    local qty = w and w.qty or 1
+    local text
+    if w and (w.price or 0) > 0 then
+        text = ("I can make %s for you - %dx for %s each?"):format(link, qty, GH.Money(w.price))
+    else
+        text = ("I can make %s for you - %dx?"):format(link, qty)
+    end
+    GH.UI.WhisperText(owner, text)
+end
+
+-- Do I have a wanted post up for this item?
+function L.MyWantFor(key)
+    local d = GH.MyData()
+    for _, w in ipairs(d and d.wants or {}) do
+        if C.ItemIdFromString(w.item) == key then return w end
+    end
+end
+
 -- ---------------------------------------------------------------------------
 -- Wanted posts
 -- ---------------------------------------------------------------------------
@@ -194,8 +216,8 @@ function L.NotifyWants(profile)
             if prof then
                 db.notified[tag] = now
                 local link = C.KeyLink(id) or ("item " .. id)
-                GH.msg("%s is looking for %s - you can make it (%s).",
-                    GH.ColorName(profile.owner, profile.class), link, prof)
+                GH.msg("%s is looking for %s - you can make it (%s). %s",
+                    GH.ColorName(profile.owner, profile.class), link, prof, GH.WantLink(id))
             end
         end
     end
