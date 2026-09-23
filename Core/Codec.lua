@@ -61,6 +61,9 @@ function C.IsBoundInBags(id)
 end
 
 C.MAX_PROFS = 16
+C.MAX_RECIPES_TOTAL = 3000   -- across all of one profile's professions
+C.MAX_MEMBERS = 400          -- stored profiles per guild
+C.MAX_NAME = 64
 C.MAX_RECIPES = 1200
 C.MAX_LISTINGS = 40
 C.MAX_WANTS = 25
@@ -296,7 +299,7 @@ local function B36(s) return s and s:match("^[%w]+$") and tonumber(s, 36) or nil
 function C.DecodeProfile(text)
     if type(text) ~= "string" or text == "" then return nil end
     local p = { profs = {}, listings = {}, wants = {} }
-    local nprof, header = 0, 0
+    local nprof, header, nrecipes = 0, 0, 0
     for line in (text .. "\n"):gmatch("(.-)\n") do
         if line ~= "" then
             local f = { strsplit("\t", line) }
@@ -308,11 +311,14 @@ function C.DecodeProfile(text)
                 p.class = (f[4] ~= "" and f[4]) or nil
                 p.level = Int(f[5])
                 if not (p.owner and p.owner:match("^[^%-%s][^%-]*%-.+$") and p.rev and #f == 5) then return nil end
+                -- A name is shown in chat and tooltips: no escape codes, no unbounded length.
+                if #p.owner > C.MAX_NAME or p.owner:find("|", 1, true) or p.owner:find("%c") then return nil end
             elseif kind == "F" then
                 local skillLine, rank, max = Int(f[2]), Int(f[3]), Int(f[4])
                 if not (skillLine and rank and max and B36(f[5]) and f[6] and #f == 6) then return nil end
                 nprof = nprof + 1
                 if nprof > C.MAX_PROFS then return nil end
+                if rank > 1000 or max > 1000 then return nil end
                 local prof = { rank = rank, max = max, scanned = B36(f[5]) }
                 if f[6] ~= "-" then
                     prof.recipes = {}
@@ -322,7 +328,8 @@ function C.DecodeProfile(text)
                             local spellID = B36(w)
                             if not spellID then return nil end
                             n = n + 1
-                            if n > C.MAX_RECIPES then return nil end
+                            nrecipes = nrecipes + 1
+                            if n > C.MAX_RECIPES or nrecipes > C.MAX_RECIPES_TOTAL then return nil end
                             prof.recipes[spellID] = true
                         end
                     end

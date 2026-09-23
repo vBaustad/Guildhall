@@ -37,7 +37,7 @@ local function join(...) return table.concat({ ... }, "\t") end
 -- The client can still refuse a message (Enum.SendAddonMessageResult, e.g. in restricted content);
 -- that only shows after the fact, per chunk. Count it, and send lockdown refusals again once the
 -- restriction changes.
-Sync.stats = { sent = 0, received = 0, refused = {} }
+Sync.stats = { sent = 0, received = 0, refused = {}, restoredPosts = 0, restoredOrders = 0 }
 local RESULT = Enum and Enum.SendAddonMessageResult or {}
 local RESULT_NAME = {}
 for name, value in pairs(RESULT) do RESULT_NAME[value] = name end
@@ -147,17 +147,76 @@ local function HeldProfile(owner)
     return p
 end
 
-local function StoreProfile(p, sender)
+-- A guildie sent back their copy of MY profile, because this character's record had to start from
+-- scratch this session (see GH.freshSelf). Only listings and wants are taken - professions come back
+-- from the scan anyway - and only what isn't there already. A live profile is never overwritten.
+function Sync.RestoreSelf(p, sender)
+    local d = GH.MyData()
+    if not d or GH.restoreClosed then return end
+    -- More guildies can answer the same hello: keep merging their copies for the rest of the session.
+    if not (d.restorePending or GH.restoredThisSession) then return end
+    local haveListing, haveWant = {}, {}
+    for _, l in ipairs(d.listings) do haveListing[l.item] = true end
+    for _, w in ipairs(d.wants) do haveWant[C.ItemIdFromString(w.item) or w.item] = true end
+    local added = 0
+    for _, l in ipairs(p.listings or {}) do
+        if not haveListing[l.item] and #d.listings < C.MAX_LISTINGS then
+            d.listings[#d.listings + 1] = { id = GH.NextId(), item = l.item, count = l.count, note = l.note,
+                posted = l.posted }
+            haveListing[l.item] = true
+            added = added + 1
+        end
+    end
+    for _, w in ipairs(p.wants or {}) do
+        local key = C.ItemIdFromString(w.item) or w.item
+        if not haveWant[key] and #d.wants < C.MAX_WANTS then
+            d.wants[#d.wants + 1] = { id = GH.NextId(), item = w.item, note = w.note, posted = w.posted,
+                qty = w.qty, price = w.price }
+            haveWant[key] = true
+            added = added + 1
+        end
+    end
+    if added > 0 then
+        Sync.stats.restoredPosts = Sync.stats.restoredPosts + added
+        GH.restoredThisSession = true
+        GH.msg("restored %s from %s's copy.", GH.Count(added, "listing or wanted post", "listings and wanted posts"),
+            GH.Short(sender))
+        GH.BumpRev("restore")
+    end
+end
+
+-- fresh: the owner's record started from scratch (see GH.freshSelf), so its posts may just be missing.
+local function StoreProfile(p, sender, fresh)
     local g = GH.GuildDB()
     if not g or not p.owner then return end
-    if p.owner == GH.Me() then return end
+    -- Revisions are timestamps: one from the future would lock out the owner's real updates.
+    if (p.rev or 0) > GH.Now() + 86400 then return end
+    if p.owner == GH.Me() then
+        Sync.RestoreSelf(p, sender)
+        return
+    end
     -- With a roster we can tell strangers apart; without one, the guild channel vouches for them.
     if GH.rosterComplete and not GH.KnownGuildie(p.owner) then return end
     local direct = (p.owner == sender)
     local cur = g.members[p.owner]
     if cur then
-        if direct and p.rev < (cur.rev or 0) then return end
-        if not direct and p.rev <= (cur.rev or 0) then return end
+        -- The owner always wins over a copy passed on by someone else, whatever the revisions say:
+        -- otherwise one bad relay could keep the real profile out for good.
+        if direct and cur.via then
+            -- take it
+        elseif direct and p.rev < (cur.rev or 0) then return
+        elseif not direct and p.rev <= (cur.rev or 0) then return end
+    elseif not direct then
+        -- Relayed profile for someone new: only up to a sane number of them.
+        local n = 0
+        for _ in pairs(g.members) do n = n + 1 end
+        if n >= C.MAX_MEMBERS then return end
+    end
+    -- A fresh profile brings professions and rev, but never wipes the posts we hold for them. Kept as
+    -- fresh (and relayed as such) until the owner publishes normally again.
+    p.fresh = fresh or nil
+    if fresh and cur and (#(cur.listings or {}) > 0 or #(cur.wants or {}) > 0) then
+        p.listings, p.wants = cur.listings, cur.wants
     end
     p.received = GH.Now()
     p.stale = nil
@@ -192,13 +251,14 @@ function Sync.Hello()
     helloSent = true
     SetSyncing(true)
     Sync.DoneSoon(25)
-    Sync.Send(join("HI", PROTO, GH.VERSION, d.rev), nil, "GUILD")
+    -- A fifth field "1" asks guildies holding a copy of my profile to send it back (fresh record).
+    Sync.Send(join("HI", PROTO, GH.VERSION, d.rev, GH.freshSelf and "1" or "0"), nil, "GUILD")
     GH.dbg("hello sent (rev %d)", d.rev)
 end
 
 function Sync.Publish()
     if not helloSent or not IsInGuild() then return end
-    Sync.Send(join("PRO", PROTO), MyPayload(), "GUILD", nil, "BULK")
+    Sync.Send(join("PRO", PROTO, GH.freshSelf and "F" or ""), MyPayload(), "GUILD", nil, "BULK")
     GH.dbg("published profile")
 end
 
@@ -207,18 +267,32 @@ end
 -- ---------------------------------------------------------------------------
 local H = {}
 
+-- Their record is new this session (HI/YO field 5 = "1"): send back what we hold of it, before we
+-- ask for their profile - that request would replace our copy with their empty one.
+local function SendBackCopy(f, sender)
+    if f[5] ~= "1" or RateLimited("COPY", sender, 300) then return end
+    local g = GH.GuildDB()
+    local copy = g and g.members[sender]
+    if copy and (#(copy.listings or {}) > 0 or #(copy.wants or {}) > 0) then
+        Sync.Send(join("PRO", PROTO), C.EncodeProfile(copy, copy.listings, copy.wants), "WHISPER", sender)
+    end
+end
+
 H.HI = function(f, _, sender)
+    SendBackCopy(f, sender)
     SeePeer(sender, f[3])
     NoteRev(sender, tonumber(f[4]))
     local d = GH.MyData()
-    if d and helloSent then
+    -- One reply per sender per 30 s: a peer repeating hellos can't turn into a whisper storm.
+    if d and helloSent and not RateLimited("YO", sender, 30) then
         C_Timer.After(Sync.PeerCount() < 10 and Jitter(0.5, 3) or Jitter(2, 12), function()
-            Sync.Send(join("YO", PROTO, GH.VERSION, d.rev), nil, "WHISPER", sender)
+            Sync.Send(join("YO", PROTO, GH.VERSION, d.rev, GH.freshSelf and "1" or "0"), nil, "WHISPER", sender)
         end)
     end
 end
 
 H.YO = function(f, _, sender)
+    SendBackCopy(f, sender)
     SeePeer(sender, f[3])
     NoteRev(sender, tonumber(f[4]))
     if not manifestAsked then
@@ -231,12 +305,12 @@ end
 
 H.GET = function(_, _, sender)
     if RateLimited("GET", sender, 30) then return end
-    Sync.Send(join("PRO", PROTO), MyPayload(), "WHISPER", sender, "BULK")
+    Sync.Send(join("PRO", PROTO, GH.freshSelf and "F" or ""), MyPayload(), "WHISPER", sender, "BULK")
 end
 
-H.PRO = function(_, body, sender)
+H.PRO = function(f, body, sender)
     local p = C.DecodeProfile(body)
-    if p then StoreProfile(p, sender) end
+    if p then StoreProfile(p, sender, f[3] == "F") end
 end
 
 H.MQ = function(_, _, sender)
@@ -287,7 +361,8 @@ H.RQ = function(f, _, sender)
         local p = owner and HeldProfile(owner)
         if p and GH.KnownGuildie(owner) then
             served = served + 1
-            Sync.Send(join("PRO", PROTO), C.EncodeProfile(p, p.listings, p.wants), "WHISPER", sender, "BULK")
+            Sync.Send(join("PRO", PROTO, (p.fresh or p.restorePending) and "F" or ""), C.EncodeProfile(p, p.listings, p.wants),
+                "WHISPER", sender, "BULK")
         end
     end
     lastServed["RQn" .. sender] = served
@@ -297,14 +372,33 @@ end
 -- Other modules (craft requests) add their own message kinds.
 function Sync.Handle(kind, fn) H[kind] = fn end
 
+-- A sender gets a budget of messages per window; past that we stop reading them. Normal syncing is
+-- a handful of messages, so this only ever bites a flood.
+local budget = {}
+local BUDGET, WINDOW = 40, 10
+local function Flooding(sender)
+    local now, b = GetTime(), budget[sender]
+    if not b or now - b.start > WINDOW then
+        budget[sender] = { start = now, n = 1 }
+        return false
+    end
+    b.n = b.n + 1
+    if b.n == BUDGET + 1 then GH.dbg("ignoring a flood of messages from %s", sender) end
+    return b.n > BUDGET
+end
+
 function Sync:OnCommReceived(prefix, message, dist, sender)
     if prefix ~= PREFIX then return end
     Sync.stats.received = Sync.stats.received + 1
+    -- Any message means they're online right now (the roster may not know).
+    local known = Sync.peers[GH.FullName(sender) or ""]
+    if known then known.seen = GH.Now() end
     sender = GH.FullName(sender)
     if not sender or sender == GH.Me() then return end
     if dist ~= "GUILD" and dist ~= "WHISPER" then return end
     -- Whispers can come from anyone; only guildies get an answer.
     if dist == "WHISPER" and not GH.KnownGuildie(sender) then return end
+    if Flooding(sender) then return end
 
     local header, body = message:match("^([^\n]*)\n?(.*)$")
     if not header then return end
@@ -343,23 +437,8 @@ GH.Listen("ROSTER", function(first)
     if first and not helloSent then
         C_Timer.After(Jitter(2, 6), Sync.Hello)
     end
-    -- Forget guildies who left (only when the roster includes offline members).
-    local g = GH.GuildDB()
-    if g and GH.rosterComplete then
-        local now, changed = GH.Now(), false
-        for owner, p in pairs(g.members) do
-            if GH.IsGuildie(owner) then
-                p.missingSince = nil
-            else
-                p.missingSince = p.missingSince or now
-                if now - p.missingSince > 3 * 86400 then
-                    g.members[owner] = nil
-                    changed = true
-                end
-            end
-        end
-        if changed then GH.Fire("DATA_CHANGED") end
-    end
+    -- Stored profiles are never pruned: the roster can be empty or partial, and losing a guildie's
+    -- data because they weren't listed is worse than keeping one of someone who left.
 end)
 
 -- Profiles saved last session are shown right away, marked until a fresh copy arrives.
@@ -421,6 +500,15 @@ function GH.PrintStatus()
         if p.received and (not oldest or p.received < oldest) then oldest = p.received end
     end
     GH.msg("stored profiles: %d%s.", members, oldest and (" (oldest seen " .. GH.Ago(oldest) .. ")") or "")
+    local orders, open = 0, 0
+    for _, tbl in pairs({ g.incoming or {}, g.outgoing or {} }) do
+        for _, o in pairs(tbl) do
+            orders = orders + 1
+            if not GH.Orders.FINISHED[o.status] then open = open + 1 end
+        end
+    end
+    GH.msg("stored requests: %d (%d open). Restored from guildies this session: %d posts, %d requests.",
+        orders, open, Sync.stats.restoredPosts, Sync.stats.restoredOrders)
     if roster == 0 then
         GH.msg("roster: 0 members - it fills in when the client provides it; sharing works without it.")
     else

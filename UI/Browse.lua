@@ -127,6 +127,9 @@ local function MakeDetailRow(parent)
         GameTooltip:Show()
     end)
     r:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    r:SetScript("OnMouseUp", function(self, button)
+        if button == "RightButton" then U.PersonMenu(self, self.owner) end
+    end)
     return r
 end
 
@@ -226,6 +229,7 @@ local function RenderDetail()
         r.bg:SetShown(ri % 2 == 0)
         r.b1:SetScript("OnClick", nil)
         r.b2:SetScript("OnClick", nil)
+        r.owner = nil
         r:Show()
         y = y - DETAIL_ROW_H
         return r
@@ -236,6 +240,7 @@ local function RenderDetail()
         for _, c in ipairs(crafters) do
             local r = row()
             local isMe = c.owner == GH.Me()
+            r.owner = c.owner
             r.name:SetText(PersonLabel(c.owner, c.class))
             r.meta:SetText(("|cff8a8a8a%s %d|r"):format(c.prof, c.rank or 0))
             local note = isMe and "" or (GH.IsOnline(c.owner) and "|cff60d060online|r" or "offline - requests wait until they log in")
@@ -255,9 +260,12 @@ local function RenderDetail()
         for _, l in ipairs(listings) do
             local r = row()
             local isMe = l.owner == GH.Me()
+            r.owner = l.owner
             r.name:SetText(PersonLabel(l.owner, l.class))
-            r.meta:SetText(("|cffffffffx%d|r  |cff8a8a8a%s|r"):format(l.l.count or 1, GH.Ago(l.l.posted)))
-            r.note:SetText(l.l.note ~= "" and l.l.note or "|cff6a6a6ano note|r")
+            r.meta:SetText(("|cffffffffx%d|r  |cff8a8a8a%s%s|r"):format(l.l.count or 1,
+                l.stale and "last confirmed " or "", GH.Ago(l.l.posted)))
+            r.note:SetText(l.stale and "|cff8a8a8aold - ask before counting on it|r"
+                or (l.l.note ~= "" and l.l.note or "|cff6a6a6ano note|r"))
             r.tip = { GH.Short(l.owner), l.l.note ~= "" and l.l.note or nil }
             r.b1:SetShown(not isMe)
             r.b1:SetEnabled(GH.IsOnline(l.owner))
@@ -270,6 +278,7 @@ local function RenderDetail()
         for _, w in ipairs(wants) do
             local r = row()
             local isMe = w.owner == GH.Me()
+            r.owner = w.owner
             r.name:SetText(PersonLabel(w.owner, w.class))
             local want = w.w
             r.meta:SetText(("|cffffffffx%d|r  %s|cff8a8a8a%s|r"):format(want.qty or 1,
@@ -370,9 +379,12 @@ local function ProfessionCards()
     local showSecondary = Prefs().showSecondary
     local seen = {}
     for id, g in pairs(groups) do
-        local name = GH.ProfName(id)
-        seen[name] = true
-        if not GH.GATHERING[name] and (showSecondary or not SECONDARY[name]) then
+        -- By skill line, not by name: gathering and secondary lines are known by ID, and a line we
+        -- can't even name is skipped rather than shown as "Profession 356".
+        local name = GH.ProfNameOrNil(id)
+        if name then seen[name] = true end
+        local secondary = GH.SECONDARY_LINE[id] or SECONDARY[name]
+        if name and not GH.GATHERING_LINE[id] and (showSecondary or not secondary) then
             have[#have + 1] = { prof = name, id = id, people = g.people, best = g.best }
         end
     end

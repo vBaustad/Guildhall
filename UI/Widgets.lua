@@ -325,6 +325,19 @@ function U.ScrollList(parent, rowHeight, numRows, build, fill)
     return list
 end
 
+-- Right-click menu on a guildie's name: block them (local only, they aren't told).
+function U.PersonMenu(anchor, full)
+    if not full or full == GH.Me() or not (MenuUtil and MenuUtil.CreateContextMenu) then return end
+    MenuUtil.CreateContextMenu(anchor, function(_, root)
+        root:CreateTitle(GH.Short(full))
+        if GH.IsBlocked(full) then
+            root:CreateButton("Unblock " .. GH.Short(full), function() GH.SetBlocked(full, false) end)
+        else
+            root:CreateButton("Block " .. GH.Short(full), function() GH.SetBlocked(full, true) end)
+        end
+    end)
+end
+
 -- Gold section heading with the Options panel's divider under it.
 function U.Heading(parent, text)
     local fs = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")

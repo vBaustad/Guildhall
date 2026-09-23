@@ -14,6 +14,21 @@ local POINTS = {
       .. "Offer spares under \"Guildies have it\" and post what you need under \"Wanted\"." },
 }
 
+-- What still keeps Guildhall from being useful: no guild to share with, or a crafting profession whose
+-- recipes only its own window can list. Listings and wanted posts are optional, so they don't count.
+-- Returns the reason for the card, and the action to put on its button.
+local function SetupState()
+    if not IsInGuild() then return "join a guild to share with", "Join a guild" end
+    local d = GH.MyData()
+    for id in pairs(d and d.profs or {}) do
+        if not GH.Scan.GATHERING_LINES[id] and not GH.Scan.HasStaticRecipes(id) and not d.profs[id].recipes then
+            local name = GH.ProfName(id)
+            return ("open your %s window once"):format(name), ("Open your %s window"):format(name)
+        end
+    end
+    return nil
+end
+
 local function Build(page)
     local width = page:GetWidth() - 16
     local y = -4
@@ -49,6 +64,12 @@ GH.Listen("LOGIN", function()
         id = "Guildhall", title = "Guildhall", version = 1, order = 10,
         icon = "Interface\\AddOns\\Guildhall\\Media\\icon",
         subtitle = "Your guild's crafting directory: who can make what, and a way to ask them.",
+        blurb = "See who in your guild can craft what, who has a spare, and ask them - without asking in chat.",
+        needsSetup = function() return SetupState() ~= nil end,
+        reason = function() return (SetupState()) end,
+        -- The button names the step that's actually missing, matching the reason next to it.
+        setupLabel = function() return select(2, SetupState()) end,
+        onOpen = function() GH.ShowTab("browse") end,
         build = Build,
     }, GH.DB())
 end)

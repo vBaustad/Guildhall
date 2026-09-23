@@ -14,6 +14,10 @@ GH.Data.professions = {
     [202] = "Engineering",
     [333] = "Enchanting",
     [129] = "First Aid",
+    [182] = "Herbalism",
+    [186] = "Mining",
+    [356] = "Fishing",
+    [393] = "Skinning",
 }
 -- [spellFocusID] = station name (camp stations and classic anvils/forges)
 GH.Data.stations = {

@@ -1,5 +1,70 @@
 # Guildhall
 
+## 0.2.0-beta4
+
+- **Tougher against a guildie who sends nonsense.** Names that carry chat escape codes are rejected, a
+  profile can't claim an impossible skill, quantity, date or size, the number of profiles and reminders
+  Guildhall stores is capped, and a client that floods the channel is ignored instead of answered. A
+  profile sent by its own owner always wins over a copy passed on by someone else.
+- Guildhall rebuilds its search index less often while a login sync is still arriving.
+- WoW: Forever currently forgets addon settings when you restart the game - a known client bug, not
+  something an addon can prevent. Guildhall now rebuilds what it can from your guildies, and a session
+  that started without its saved data never replaces what they hold.
+- **Guildhall data doesn't disappear any more.**
+  - Guildies' professions and posts are never deleted because someone is missing from the guild roster.
+    Before, a profile was dropped after 3 days off the roster, and on Forever the roster is often empty or
+    partial.
+  - Open craft requests never expire. Finished ones are kept for 30 days before they're cleaned up.
+    Removing one from your list only hides it, so it can't come back.
+  - If your saved data is lost, guildies who are online send back what they have. That covers your
+    listings and wanted posts, and every craft request between you and them, in both directions. Your
+    professions come back from the automatic scan. Until that happens (even over several sessions),
+    your profile can't replace the posts guildies hold for you. Posting or removing something yourself
+    ends that, and from then on your own list counts.
+  - A status only changes on the side that owns it. The requester cancels; the crafter accepts, declines
+    or finishes. If one side missed an update, it's sent again.
+- A craft request sent to a guildie who was offline is now delivered as soon as their Guildhall says hello.
+  Before, it waited until the guild roster showed them online, which on Forever may never happen.
+- **What a guildie shared stays, whether or not they're online.** Their professions, recipes and offers are
+  kept for good and shown in Browse, on tooltips and in search even if they haven't logged in for months.
+  An offer older than 30 days is no longer hidden: it says "last confirmed 2 months ago" and "old - ask
+  before counting on it" instead of quietly disappearing.
+- The window's status line now keeps the two numbers apart: how many guildies have shared with you, and how
+  many are online with Guildhall right now.
+- **The count of guildies online with Guildhall no longer falls back to zero.** Anyone whose Guildhall has
+  answered in the last hour counts as online, so a guild roster that is empty or lists only some members
+  can't make it look like you're alone. While guildies have answered but haven't sent anything yet, the
+  window says so instead of "only you so far".
+- If this character has used Guildhall before but the saved data didn't load (this can happen after an
+  addon update until the game is fully restarted), one chat line says so.
+- **No more "Profession 356" card.** Fishing, Herbalism, Mining and Skinning were missing their names, so a
+  guildie's Fishing showed up on the professions overview as an unnamed card with a question-mark icon.
+  They're named now, and the overview sorts professions by skill line instead of by name. Fishing counts as
+  a secondary profession like Cooking and First Aid: it's hidden unless you tick "Show secondary
+  professions", and it never appears under "not covered yet". A profession Guildhall can't name at all is
+  left out rather than shown as a number. Names come from the game itself, so professions we don't ship
+  data for are named properly too.
+- **A crafter is listed once per item.** The same character could appear twice under "Can craft it", once
+  for each of their professions, which also made the item header count them as two crafters. Each character
+  now gets one row, naming the profession that actually teaches the recipe.
+- Recipes are no longer filed under the wrong profession: an open profession window sometimes lists more
+  than its own recipes. Anything saved that way is moved to the right profession, or dropped, at login.
+- **Settings live in one place.** Guildhall's options are now a page in the YippYapp window, reached from the
+  Settings button in Guildhall's own window, from `/gh config`, from the minimap button, or from Blizzard's
+  Options → AddOns → YippYapp. The separate Settings tab is gone (it stays only if LibForever isn't
+  installed).
+- **Don't share list.** In My Guildhall, right-click an item under Your posts and pick "Don't share this item".
+  The listing stays on your list but is no longer offered to the guild, and guildies drop it. The item can't
+  be offered again until you take it off the list, either from the same right-click menu or under
+  Settings → Private lists.
+- **Block a player.** Right-click a name in Browse or on the Requests tab and pick "Block". Their listings,
+  wanted posts and craft requests are hidden from you everywhere: lists, tooltips, chat lines and counts.
+  Nothing is sent and they can't tell: new requests from them are answered as usual but never stored. Their
+  data is still kept and shared with other guildies. Unblock from the same menu or under Settings → Private
+  lists. Both lists apply to all your characters.
+- `/gh status` shows how many requests are stored and how many posts and requests guildies restored
+  this session.
+
 ## 0.2.0-beta3
 
 - **Wanted posts you can craft are easy to find.** The Requests tab lists them under your craft requests

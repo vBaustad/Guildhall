@@ -105,19 +105,66 @@ local function Build(f, extraButton)
     f.slider, f.sliderLabel = s, setLabel
     last = low  -- same left edge as the slider
 
-    -- Bottom: the shared YippYapp settings link, welcome, and the family footer.
-    if LIB and LIB.LauncherOptions then
-        place(LIB.LauncherOptions(f, "Guildhall"), SECTION_GAP + 14, 8)
+    -- Personal lists: one summary line each, and a menu to take entries off.
+    heading("Private lists")
+    local function listLine(label, tip, entries, removeLabel, remove)
+        local b = U.Button(f, label, 150, 22)
+        place(b, 8, 8)
+        local text = f:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+        text:SetPoint("LEFT", b, "RIGHT", 10, 0)
+        text:SetPoint("RIGHT", f, "RIGHT", -8, 0)
+        text:SetJustifyH("LEFT")
+        text:SetWordWrap(false)
+        b:SetScript("OnClick", function(self)
+            local list = entries()
+            if #list == 0 or not (MenuUtil and MenuUtil.CreateContextMenu) then return end
+            MenuUtil.CreateContextMenu(self, function(_, root)
+                root:CreateTitle(removeLabel)
+                for _, e in ipairs(list) do
+                    root:CreateButton(e.label, function()
+                        remove(e.value)
+                        for _, update in ipairs(f.lists) do update() end
+                    end)
+                end
+            end)
+        end)
+        U.Tooltip(b, label, tip)
+        f.lists = f.lists or {}
+        f.lists[#f.lists + 1] = function()
+            local list = entries()
+            local names = {}
+            for i, e in ipairs(list) do
+                if i > 6 then names[#names + 1] = ("and %d more"):format(#list - 6) break end
+                names[#names + 1] = e.label
+            end
+            text:SetText(#list == 0 and "|cff8a8a8anone|r" or table.concat(names, ", "))
+            b:SetEnabled(#list > 0)
+        end
     end
+    listLine("Blocked players...", "Right-click a name in Browse or Requests to block someone. Their posts and "
+        .. "craft requests are hidden from you. Nothing is sent - they can't tell.",
+        function()
+            local out = {}
+            for _, full in ipairs(GH.BlockedList()) do out[#out + 1] = { label = GH.Short(full), value = full } end
+            return out
+        end, "Unblock", function(full) GH.SetBlocked(full, false) end)
+    listLine("Don't share...", "Right-click an item under Your posts in My Guildhall. Items on this list are "
+        .. "never offered to the guild. Take one off to offer it again.",
+        function()
+            local out = {}
+            for _, id in ipairs(GH.NoShareList()) do
+                out[#out + 1] = { label = GH.Index.Name(id) or ("item " .. id), value = id }
+            end
+            return out
+        end, "Share again", function(id) GH.SetNoShare(id, false) end)
+
+    -- Bottom: a way into Guildhall and the family footer. The minimap and launcher choices live in the
+    -- YippYapp window's own settings view, so they aren't repeated here.
+    -- No "Welcome / what's new" button here: this page lives in the YippYapp window, which has one.
     local buttons = {}
-    if LIB and LIB.OpenWelcome then
-        local welcome = U.Button(f, "Welcome / what's new", 170, 22)
-        welcome:SetScript("OnClick", function() LIB.OpenWelcome("Guildhall") end)
-        buttons[#buttons + 1] = welcome
-    end
     if extraButton then buttons[#buttons + 1] = extraButton(f) end
     for i, b in ipairs(buttons) do
-        if i == 1 then place(b, 4, 8) else b:SetPoint("LEFT", buttons[i - 1], "RIGHT", 8, 0) end
+        if i == 1 then place(b, SECTION_GAP + 14, 8) else b:SetPoint("LEFT", buttons[i - 1], "RIGHT", 8, 0) end
     end
     if LIB and LIB.WelcomePsstText then
         local psst = f:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
@@ -135,13 +182,24 @@ local function Refresh(f)
     f.slider:SetValue(days)
     f.sliderLabel(days)
     if f.psst then f.psst:SetText(LIB.WelcomePsstText("Guildhall")) end
+    for _, update in ipairs(f.lists or {}) do update() end
+end
+
+-- Settings live in one place: the YippYapp window. Only if that page can't be hosted does Guildhall
+-- fall back to a Settings tab of its own, so the options are never out of reach.
+local hosted = false
+
+local function UseOwnTab()
+    GH.RegisterTab("settings", "Settings", Build, Refresh)
 end
 
 function GH.OpenOptions()
-    GH.ShowTab("settings")
+    if hosted then
+        LIB.OpenAddonSettings("Guildhall")
+    else
+        GH.ShowTab("settings")
+    end
 end
-
-GH.RegisterTab("settings", "Settings", Build, Refresh)
 
 -- Blizzard's Options -> AddOns -> Guildhall: the same page, plus a way into the window.
 local function OpenGuildhallButton(parent)
@@ -153,19 +211,37 @@ local function OpenGuildhallButton(parent)
     return open
 end
 
+-- Taller than the YippYapp window's page area, so the lib gives it a scroll bar.
+local PAGE_HEIGHT = 500
+
 local function RegisterBlizzardPanel()
-    if not (Settings and Settings.RegisterCanvasLayoutCategory) then return end
+    if not (Settings and Settings.RegisterCanvasLayoutCategory) then
+        UseOwnTab()
+        return
+    end
     local panel = CreateFrame("Frame")
+    -- The lib reparents and sizes this page inside the YippYapp window; everything inside anchors to
+    -- it, so it follows whatever width it's given.
+    panel:SetHeight(PAGE_HEIGHT)
     local page = CreateFrame("Frame", nil, panel)
     page:SetPoint("TOPLEFT", 10, -10)
     page:SetPoint("BOTTOMRIGHT", -10, 10)
     Build(page, OpenGuildhallButton)
-    panel:SetScript("OnShow", function() Refresh(page) end)
-    -- Under YippYapp in Options -> AddOns (the lib also links it to the YippYapp page's Settings button).
-    if LIB and LIB.RegisterOptionsPage then
-        LIB.RegisterOptionsPage("Guildhall", panel)
-    else
+    -- The canvas can already count as shown when Settings adopts it, so its own OnShow may never fire:
+    -- fill the values now, on Settings' own refresh, and whenever the inner page is shown.
+    local function refresh() Refresh(page) end
+    refresh()
+    panel.OnRefresh = refresh
+    panel:HookScript("OnShow", refresh)
+    page:HookScript("OnShow", refresh)
+    -- Hosted in the YippYapp window (Blizzard's Options -> AddOns -> YippYapp is one button now).
+    -- The handle's GetID() is nil on purpose: never pass it to Settings.OpenToCategory.
+    local handle = LIB and LIB.RegisterOptionsPage
+        and LIB.RegisterOptionsPage("Guildhall", panel, "Guildhall", PAGE_HEIGHT)
+    hosted = handle ~= nil and LIB.OpenAddonSettings ~= nil
+    if not hosted then
         Settings.RegisterAddOnCategory(Settings.RegisterCanvasLayoutCategory(panel, "Guildhall"))
+        UseOwnTab()
     end
 end
 

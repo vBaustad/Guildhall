@@ -25,6 +25,9 @@ function L.Add(link, count, note)
     if blocked == "bop" or C.IsBoundInBags(id) then
         return false, "That one is soulbound, so it can't be traded."
     end
+    if GH.IsNoShare(id) then
+        return false, "That item is on your Don't share list. Take it off in Settings to offer it."
+    end
     count = math.max(1, math.min(tonumber(count) or have, have))
     note = C.Clean(note)
 
@@ -62,7 +65,9 @@ function L.Publishable()
     if not d then return out end
     local now, ttl = GH.Now(), TTL()
     for _, l in ipairs(d.listings) do
-        if not l.missing and now - (l.posted or 0) <= ttl then out[#out + 1] = l end
+        if not l.missing and now - (l.posted or 0) <= ttl and not GH.IsNoShare(C.ItemIdFromString(l.item)) then
+            out[#out + 1] = l
+        end
     end
     return out
 end
@@ -205,7 +210,7 @@ end
 
 -- A guildie posted a wanted item I can craft: say so once.
 function L.NotifyWants(profile)
-    if not GH.Settings().notifyWanted then return end
+    if not GH.Settings().notifyWanted or GH.IsBlocked(profile.owner) then return end
     local db = GH.DB()
     local now = GH.Now()
     for _, w in ipairs(profile.wants or {}) do
@@ -221,8 +226,16 @@ function L.NotifyWants(profile)
             end
         end
     end
+    local kept = 0
     for tag, t in pairs(db.notified) do
-        if now - t > 60 * 86400 then db.notified[tag] = nil end
+        if now - t > 60 * 86400 then db.notified[tag] = nil else kept = kept + 1 end
+    end
+    -- A peer could post and repost forever: keep the table bounded, oldest first.
+    if kept > 500 then
+        local list = {}
+        for tag, t in pairs(db.notified) do list[#list + 1] = { tag = tag, t = t } end
+        table.sort(list, function(a, b) return a.t < b.t end)
+        for i = 1, kept - 500 do db.notified[list[i].tag] = nil end
     end
 end
 

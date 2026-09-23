@@ -106,6 +106,8 @@ local function Build(f)
             row.bg = row:CreateTexture(nil, "BACKGROUND")
             row.bg:SetAllPoints()
             row.bg:SetColorTexture(1, 1, 1, 0.03)
+            row:RegisterForClicks("RightButtonUp")
+            row:SetScript("OnClick", function(self) U.PersonMenu(self, self.owner) end)
             row.icon = U.KeyIcon(row, 32)
             row.icon:SetPoint("TOPLEFT", 6, -6)
             row.b1 = U.Button(row, "", 70, 20)
@@ -126,6 +128,7 @@ local function Build(f)
         end,
         function(row, o, index)
             row.bg:SetShown(index % 2 == 0)
+            row.owner = nil
             if o.heading then
                 row.icon:Hide()
                 row.title:SetText("|cffe6b34d" .. o.heading .. "|r")
@@ -137,6 +140,7 @@ local function Build(f)
             row.icon:Show()
             if o.want then
                 local w = o.want
+                row.owner = w.owner
                 row.icon:SetKey(w.key)
                 row.title:SetText(GH.Listings.WantText(w.w, C.KeyColor(w.key) .. (I.Name(w.key) or "...") .. "|r"))
                 local who = GH.IsOnline(w.owner) and GH.ColorName(w.owner, w.class)
@@ -155,6 +159,7 @@ local function Build(f)
             row.title:SetText(("%s%s|r |cffffffffx%d|r"):format(C.KeyColor(o.item), I.Name(o.item) or "...", o.qty or 1))
             local incoming = side == "incoming"
             local other = incoming and o.requester or o.crafter
+            row.owner = other
             local roster = GH.roster[other]
             local who = GH.IsOnline(other) and GH.ColorName(other, roster and roster.class) or ("|cff8a8a8a" .. GH.Short(other) .. "|r")
             local status = (incoming and IN_STATUS or OUT_STATUS)[o.status] or o.status

@@ -13,6 +13,11 @@ GH.PROFESSIONS = {
     "Alchemy", "Blacksmithing", "Enchanting", "Engineering", "Leatherworking", "Tailoring",
     "Cooking", "First Aid", "Herbalism", "Mining", "Skinning", "Fishing",
 }
+-- Which skill lines are which, by ID: names can be missing for a line we've never seen, and a card
+-- must never be decided by a name like "Profession 356". Fishing is secondary, not gathering, so it
+-- follows the "Show secondary professions" tick like Cooking and First Aid.
+GH.GATHERING_LINE = { [182] = true, [186] = true, [393] = true }
+GH.SECONDARY_LINE = { [185] = true, [129] = true, [356] = true }
 GH.PROF_ICON = {
     Alchemy = "Interface\\Icons\\Trade_Alchemy",
     Blacksmithing = "Interface\\Icons\\Trade_BlackSmithing",
@@ -212,6 +217,8 @@ function GH.DB()
     db.reagents = db.reagents or {}
     db.notified = db.notified or {}
     db.outputs = db.outputs or {}    -- [recipeSpellID] = crafted itemID, for recipes not in the static data
+    db.blocked = db.blocked or {}    -- ["Name-Realm"] = time blocked. Local only: nobody is told.
+    db.noShare = db.noShare or {}    -- [itemID] = true: never offered to the guild
     -- Data version 2 (recipe spell IDs instead of crafted item IDs) has been the only format all
     -- through the beta, so nothing is wiped here any more: a wipe on a table that merely looks
     -- unversioned would throw away every guildie profile. Old v1 profiles are simply replaced as
@@ -231,7 +238,13 @@ function GH.MyData()
     if not d then
         d = { rev = 0, profs = {}, listings = {}, wants = {}, nextId = 1 }
         chars[me] = d
+        -- A brand-new record: first use, or saved data that didn't load. Until guildies send back
+        -- their copy of my posts (Sync.RestoreSelf) or I post or remove something myself, my profile
+        -- goes out marked fresh, so it can't replace the posts they hold. Saved, so it survives a
+        -- session where nobody with a copy was online.
+        d.restorePending = true
     end
+    GH.freshSelf = d.restorePending or nil
     d.owner = me
     local _, classFile = UnitClass("player")
     d.class = classFile
@@ -240,12 +253,77 @@ function GH.MyData()
 end
 
 -- Something in my own data changed: bump the revision so guildies know to fetch it.
+local function Sync_PeerCount()
+    return GH.Sync and GH.Sync.PeerCount and GH.Sync.PeerCount() or 0
+end
+
+-- The client sometimes starts a session without reading any saved variables at all (a known WoW:
+-- Forever bug), and then writes the empty tables back over the good ones on exit. LibForever can tell
+-- us when that happened; until we know otherwise we assume our data is fine.
+function GH.StoreTrusted()
+    if LIB and LIB.SavedVariablesLoaded then return LIB.SavedVariablesLoaded() end
+    return true
+end
+
 function GH.BumpRev(reason)
     local d = GH.MyData()
     if not d then return end
     d.rev = math.max((d.rev or 0) + 1, GH.Now())
+    -- Posting or removing something myself makes my own list the truth - but not while guildies are
+    -- still expected to send back what they hold, or one new post would wipe the rest of my old ones.
+    if (reason == "listings" or reason == "wants")
+        and (GH.restoredThisSession or not GH.Sync or Sync_PeerCount() == 0) then
+        d.restorePending, GH.freshSelf = nil, nil
+        GH.restoreClosed = true
+    elseif reason == "restore" then
+        d.restorePending, GH.freshSelf = nil, nil
+    end
     GH.Fire("MY_DATA_CHANGED", reason)
     GH.Fire("DATA_CHANGED")
+end
+
+-- ---------------------------------------------------------------------------
+-- Personal lists
+-- ---------------------------------------------------------------------------
+-- Blocked players: their posts and craft requests are hidden from me. Their profile is still stored
+-- and passed on to guildies who ask, so blocking never costs anyone else data.
+function GH.IsBlocked(full)
+    return full ~= nil and GH.DB().blocked[full] ~= nil
+end
+
+function GH.SetBlocked(full, on)
+    if not full or full == GH.Me() then return end
+    GH.DB().blocked[full] = on and GH.Now() or nil
+    GH.msg(on and "blocked %s. Their posts and craft requests are hidden - they aren't told. Unblock in Settings."
+        or "unblocked %s.", GH.Short(full))
+    GH.Fire("DATA_CHANGED")
+    GH.Fire("ORDERS_CHANGED")
+end
+
+function GH.BlockedList()
+    local list = {}
+    for full in pairs(GH.DB().blocked) do list[#list + 1] = full end
+    table.sort(list)
+    return list
+end
+
+-- Items I never offer: a listing for one stays on my list but isn't published.
+function GH.IsNoShare(itemID)
+    return itemID ~= nil and GH.DB().noShare[itemID] ~= nil
+end
+
+function GH.SetNoShare(itemID, on)
+    if not itemID then return end
+    GH.DB().noShare[itemID] = on and true or nil
+    -- My own choice: publish normally, so guildies drop (or get back) the listing.
+    GH.BumpRev("listings")
+end
+
+function GH.NoShareList()
+    local list = {}
+    for id in pairs(GH.DB().noShare) do list[#list + 1] = id end
+    table.sort(list)
+    return list
 end
 
 function GH.NextId()
@@ -285,10 +363,16 @@ function GH.GuildDB()
     return g
 end
 
+-- The roster says who is online, but it can be empty for a whole session (we never request it). A guildie
+-- who has sent us an addon message in the last hour counts as online too, so requests and status
+-- updates still get delivered.
+local PEER_FRESH = 3600
 function GH.IsOnline(full)
     if full == GH.Me() then return true end
     local r = GH.roster[full]
-    return r and r.online or false
+    if r then return r.online and true or false end
+    local peer = GH.Sync and GH.Sync.peers[full]
+    return peer ~= nil and (GH.Now() - (peer.seen or 0)) < PEER_FRESH
 end
 
 -- The roster can be empty for a long time (we never request it), so anyone who talked to us on the
@@ -359,8 +443,33 @@ GH.On("PLAYER_LOGIN", function()
     if not C_Weather then
         GH.msg("|cffff6060made for WoW: Forever only - it won't work properly in this version of the game.|r")
     end
+    -- The client sometimes skips loading saved variables after an addon's .toc changes, until the
+    -- game is fully restarted. If this character has used Guildhall before but the account-wide data
+    -- is missing, say so once; guildies' copies fill in what they can (Sync.RestoreSelf, order replay).
+    GuildhallCharDB = type(GuildhallCharDB) == "table" and GuildhallCharDB or {}
+    local lost = GuildhallDB == nil and GuildhallCharDB.used
+    GuildhallCharDB.used = true
     GH.DB()
     GH.MyData()
+    -- Let LibForever compare our table with the other YippYapp addons': if none of them loaded, the
+    -- client dropped them all. It says so once for the whole family, so we stay quiet then.
+    if LIB and LIB.RegisterSavedTable then LIB.RegisterSavedTable(GuildhallDB) end
+    if lost and GH.StoreTrusted() then
+        GH.msg("|cffff6060saved data didn't load - fully restart the game (not /reload). Guildies online will send back what they have.|r")
+    end
+    -- A store the client never read is not the truth about what I share: keep publishing as "fresh"
+    -- so guildies keep their copy of my posts, and take back what they hold.
+    -- After the library's check has run, and after our own hello has gone out with the old flag.
+    C_Timer.After(8, function()
+        if not GH.StoreTrusted() then
+            local d = GH.MyData()
+            if d and not GH.restoreClosed then
+                d.restorePending, GH.freshSelf = true, true
+                GH.dbg("saved data never loaded - asking guildies for my posts")
+                if GH.Sync and GH.Sync.Hello then GH.Sync.Hello() end
+            end
+        end
+    end)
     GH.Fire("LOGIN")
     -- In case the roster arrived before we were listening: read what the client holds.
     -- We never request it (that's blocked), so until the client has some roster data, look again every
@@ -405,6 +514,8 @@ SlashCmdList.GUILDHALL = function(input)
             GH.lastForcedSync = now
             GH.Sync.Hello(true)
         end
+    elseif cmd == "selftest" then
+        if GH.SelfTest then GH.SelfTest() end
     elseif cmd == "debug" then
         GH.debug = not GH.debug
         GH.msg("debug %s", GH.debug and "on" or "off")

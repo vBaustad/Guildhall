@@ -11,7 +11,8 @@ local dirty = true
 -- changes mark the index dirty and a rebuild follows shortly after, out of combat.
 local function ScheduleBuild()
     dirty = true
-    GH.Coalesce("indexBuild", 1, function()
+    -- Profiles arrive in bursts at login: one rebuild every few seconds is plenty then.
+    GH.Coalesce("indexBuild", (GH.Sync and GH.Sync.syncing) and 5 or 1, function()
         if not dirty then return end
         if InCombatLockdown() then return end   -- PLAYER_REGEN_ENABLED picks it up
         I.Build()
@@ -36,22 +37,44 @@ local function Entry(key)
     return e
 end
 
-local function AddProfile(p, listings, wants)
+-- One crafter row per character and item, naming the profession that actually teaches the recipe.
+-- A scan can file a recipe under another profession of the same character (an open window doesn't
+-- always list only its own recipes), so the recipe data decides, and the best row per item wins.
+-- Returns [key] = { profID, rank, spell, score }.
+function I.CraftersIn(p)
+    local best = {}
     for skillLine, prof in pairs(p.profs or {}) do
-        if prof.recipes then
-            local profName = GH.ProfName(skillLine)
-            for spellID in pairs(prof.recipes) do
-                local list = Entry(C.RecipeOutputKey(spellID)).crafters
-                list[#list + 1] = { owner = p.owner, class = p.class, prof = profName, profID = skillLine,
-                    rank = prof.rank, spell = spellID, stale = p.stale }
+        for spellID in pairs(prof.recipes or {}) do
+            local r = C.Recipe(spellID)
+            local profID = (r and r.prof) or skillLine
+            local own = p.profs[profID] or prof
+            -- Best row wins: a recipe the data knows beats one only a window scan saw, and a recipe
+            -- filed under its own profession beats one filed under another.
+            local score = (r and 2 or 0) + (profID == skillLine and 1 or 0)
+            local key = C.RecipeOutputKey(spellID)
+            local cur = best[key]
+            if not cur or score > cur.score then
+                best[key] = { profID = profID, rank = own.rank, spell = spellID, score = score }
             end
         end
     end
+    return best
+end
+
+local function AddProfile(p, listings, wants)
+    if GH.IsBlocked(p.owner) then listings, wants = nil, nil end
+    for key, c in pairs(I.CraftersIn(p)) do
+        local list = Entry(key).crafters
+        list[#list + 1] = { owner = p.owner, class = p.class, prof = GH.ProfName(c.profID), profID = c.profID,
+            rank = c.rank, spell = c.spell, stale = p.stale }
+    end
     for _, l in ipairs(listings or {}) do
         local id = C.ItemIdFromString(l.item)
-        if id and GH.Listings.IsFresh(l) then
+        if id then
+            -- Never hidden for being old: a guildie who hasn't logged in for months still shows what
+            -- they had, marked stale so nobody counts on it.
             local list = Entry(id).listings
-            list[#list + 1] = { owner = p.owner, class = p.class, l = l }
+            list[#list + 1] = { owner = p.owner, class = p.class, l = l, stale = not GH.Listings.IsFresh(l) }
         end
     end
     for _, w in ipairs(wants or {}) do
@@ -369,3 +392,82 @@ TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, function(tt, 
     tt.guildhallDone = nil
     AddTooltipLines(tt, id)
 end)
+
+-- ---------------------------------------------------------------------------
+-- /gh selftest: the crafter list, checked in game (there is no offline test runner).
+-- ---------------------------------------------------------------------------
+function GH.SelfTest()
+    local failed = 0
+    local function check(name, ok, detail)
+        if not ok then failed = failed + 1 end
+        GH.msg("%s %s%s", ok and "|cff60d060PASS|r" or "|cffff6060FAIL|r", name,
+            detail and (" - " .. detail) or "")
+    end
+
+    -- A character with two professions, one recipe wrongly filed under both: one row, right profession.
+    local spell, prof, key
+    for id in pairs(GH.Data and GH.Data.recipes or {}) do
+        local r = C.Recipe(id)
+        if r and r.prof and r.prof ~= 185 and r.item and r.item > 0 and not r.enchant then
+            spell, prof, key = id, r.prof, r.item
+            break
+        end
+    end
+    if not spell then
+        check("crafter list", false, "no recipe data to test with")
+    else
+        local fake = { owner = "Tester-Realm", profs = {
+            [prof] = { rank = 17, recipes = { [spell] = true } },
+            [185] = { rank = 8, recipes = { [spell] = true } },
+        } }
+        local crafters = I.CraftersIn(fake)
+        local n = 0
+        for _ in pairs(crafters) do n = n + 1 end
+        local c = crafters[key]
+        check("one row per character", n == 1 and c ~= nil, ("%d row(s)"):format(n))
+        check("row names the recipe's profession", c ~= nil and c.profID == prof,
+            c and GH.ProfName(c.profID) or "no row")
+        check("row keeps that profession's skill", c ~= nil and c.rank == 17,
+            c and tostring(c.rank) or "no row")
+    end
+
+    -- Every skill line we can receive has a name and is sorted into the right bucket.
+    local unnamed = {}
+    for _, id in ipairs({ 164, 165, 171, 182, 185, 186, 197, 202, 333, 356, 393, 129 }) do
+        if not GH.ProfNameOrNil(id) then unnamed[#unnamed + 1] = id end
+    end
+    check("every profession we can receive has a name", #unnamed == 0, table.concat(unnamed, ", "))
+    check("Fishing is secondary, like First Aid, and has a name",
+        GH.SECONDARY_LINE[356] == true and not GH.GATHERING_LINE[356] and GH.ProfNameOrNil(356) ~= nil,
+        tostring(GH.ProfNameOrNil(356)))
+
+    -- A guildie who answered on the addon channel stays "online" even when the guild roster is
+    -- empty or lists only some members, which is normal on Forever (we never request the roster).
+    local fake = "Selftest Peer-Selftest"
+    local peers = GH.Sync.peers
+    local savedRoster = GH.roster
+    peers[fake] = { seen = GH.Now() }
+    GH.roster = {}
+    check("heard from a guildie counts as online with an empty roster", GH.IsOnline(fake) == true)
+    peers[fake].seen = GH.Now() - 2 * 3600
+    check("a guildie not heard from for hours drops off again", GH.IsOnline(fake) == false)
+    peers[fake] = nil
+    GH.roster = savedRoster
+
+    -- The real index: nobody may appear twice for the same item.
+    if dirty then I.Build() end
+    local dupes = 0
+    for key, e in pairs(index) do
+        local seen = {}
+        for _, c in ipairs(e.crafters) do
+            if seen[c.owner] then
+                dupes = dupes + 1
+                GH.dbg("duplicate crafter %s for %s", c.owner, tostring(I.Name(key) or key))
+            end
+            seen[c.owner] = true
+        end
+    end
+    check("no duplicate crafters in your guild's index", dupes == 0, ("%d duplicate(s)"):format(dupes))
+
+    GH.msg(failed == 0 and "|cff60d060selftest passed.|r" or ("|cffff6060selftest: %d failed.|r"):format(failed))
+end

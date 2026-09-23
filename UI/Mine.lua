@@ -295,16 +295,31 @@ local function Build(f)
             row.note = U.Text(row, "GameFontDisableSmall")
             row.note:SetPoint("LEFT", row.name, "RIGHT", 6, 0)
             row.note:SetPoint("RIGHT", row.remove, "LEFT", -6, 0)
+            row:RegisterForClicks("RightButtonUp")
+            row:SetScript("OnClick", function(self)
+                local id = self.shareId
+                if not id or not (MenuUtil and MenuUtil.CreateContextMenu) then return end
+                MenuUtil.CreateContextMenu(self, function(_, root)
+                    root:CreateTitle(I.Name(id) or ("item " .. id))
+                    if GH.IsNoShare(id) then
+                        root:CreateButton("Share this item again", function() GH.SetNoShare(id, false) end)
+                    else
+                        root:CreateButton("Don't share this item", function() GH.SetNoShare(id, true) end)
+                    end
+                end)
+            end)
         end,
         function(row, item)
             local e = item.e
             local id = C.ItemIdFromString(e.item)
+            row.shareId = item.kind == "offer" and id or nil
             row.icon:SetKey(id, e.item)
             local name = C.KeyColor(id) .. (I.Name(id) or "...") .. "|r"
             if item.kind == "offer" then
                 row.tag:SetText("|cffe6b34dHave|r")
                 row.name:SetText(name .. (" |cffffffffx%d|r"):format(e.count or 1))
-                local extra = e.missing and "|cffff6060not in your bags - hidden|r " or ""
+                local extra = GH.IsNoShare(id) and "|cffff6060on your Don't share list - hidden|r "
+                    or e.missing and "|cffff6060not in your bags - hidden|r " or ""
                 row.note:SetText(extra .. (e.note ~= "" and e.note or "") .. " |cff6a6a6a" .. GH.Ago(e.posted) .. "|r")
                 row.remove:SetScript("OnClick", function() L.Remove(e.id) end)
             else

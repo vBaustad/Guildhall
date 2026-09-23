@@ -31,10 +31,14 @@ local function RefreshActive()
         local shared
         if GH.Sync.syncing then
             shared = ("syncing with your guild... %s online with Guildhall"):format(GH.Count(online, "guildie"))
+        elseif n == 0 and online > 0 then
+            -- Guildies answered but haven't sent their profile yet: don't claim you're alone.
+            shared = ("%s online with Guildhall - waiting for what they share"):format(GH.Count(online, "guildie"))
         elseif n == 0 then
             shared = "only you so far"
         else
-            shared = ("you + %s shared, %d online"):format(GH.Count(n, "guildie"), online)
+            -- Two separate facts: what you have (kept for good) and who happens to be online now.
+            shared = ("%s shared with you, %d online with Guildhall"):format(GH.Count(n, "guildie"), online)
         end
         win.status:SetText(("|c%s<%s>|r  |cff8a8a8a%s|r"):format(GH.CREAM, guild, shared))
     end
@@ -95,9 +99,17 @@ local function Build()
     close:SetHighlightFontObject("GameFontHighlight")
     close:SetScript("OnClick", function() win:Hide() end)
 
+    -- Settings have one home (the YippYapp window, or our own tab without LibForever); this is the
+    -- way there from inside Guildhall, so the tab strip stays about the guild.
+    local settings = U.Button(win, "Settings", 96, 22)
+    settings:SetPoint("RIGHT", close, "LEFT", -8, 0)
+    settings:SetNormalFontObject("GameFontNormal")
+    settings:SetHighlightFontObject("GameFontHighlight")
+    settings:SetScript("OnClick", function() GH.OpenOptions() end)
+
     win.status = U.Text(win, "GameFontHighlightSmall")
     win.status:SetPoint("LEFT", win, "BOTTOMLEFT", 24, 27)
-    win.status:SetPoint("RIGHT", close, "LEFT", -12, 0)
+    win.status:SetPoint("RIGHT", settings, "LEFT", -12, 0)
 
     -- HookScript: LibForever's RegisterWindow already hooked OnShow (raise, place, Esc).
     win:HookScript("OnShow", RefreshActive)

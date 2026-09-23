@@ -30,11 +30,35 @@ local function CountSet(t)
 end
 S.CountSet = CountSet
 
-function GH.ProfName(id)
-    if GH.Data and GH.Data.professions and GH.Data.professions[id] then return GH.Data.professions[id] end
-    local cached = GH.DB().profNames and GH.DB().profNames[id]
+-- The client can name a skill line even when we've never opened it: ask it once, then remember.
+local function AskClientForName(id)
+    local name = C_TradeSkillUI and C_TradeSkillUI.GetTradeSkillDisplayName
+        and C_TradeSkillUI.GetTradeSkillDisplayName(id)
+    if (not name or name == "") and C_SpellBook and C_SpellBook.GetSkillLineInfo then
+        local info = C_SpellBook.GetSkillLineInfo(id)
+        name = info and info.name
+    end
+    if name and name ~= "" then return name end
+    return nil
+end
+
+-- A name for a skill line, or nil when even the client can't tell us. Callers decide what to show.
+function GH.ProfNameOrNil(id)
+    local db = GH.DB()
+    local cached = db.profNames and db.profNames[id]
     if cached then return cached end
-    return "Profession " .. tostring(id)
+    -- The game knows the real, localised name; our shipped list is only there when it doesn't answer.
+    local ok, name = pcall(AskClientForName, id)
+    if ok and name then
+        db.profNames = db.profNames or {}
+        db.profNames[id] = name
+        return name
+    end
+    return GH.Data and GH.Data.professions and GH.Data.professions[id] or nil
+end
+
+function GH.ProfName(id)
+    return GH.ProfNameOrNil(id) or ("Profession " .. tostring(id))
 end
 
 local function RememberName(id, name)
@@ -174,7 +198,10 @@ function ScanOpenProfession()
     local listed = (T.GetFilteredRecipeIDs and T.GetFilteredRecipeIDs()) or (T.GetAllRecipeIDs and T.GetAllRecipeIDs()) or {}
     local db = GH.DB()
     for _, spellID in ipairs(listed) do
-        if not recipes[spellID] then
+        local known = C.Recipe(spellID)
+        -- The window can list recipes belonging to another profession; the static data has the say,
+        -- otherwise one character's Cooking ends up "crafting" a Blacksmithing item.
+        if not recipes[spellID] and not (known and known.prof and known.prof ~= profID) then
             local r = T.GetRecipeInfo(spellID)
             if r and r.learned and not r.isDummyRecipe and not r.isGatheringRecipe and not r.isSalvageRecipe then
                 recipes[spellID] = true
@@ -197,7 +224,10 @@ function ScanOpenProfession()
         d.profs[profID] = p
     end
     if partial and p.recipes then
-        for k in pairs(p.recipes) do recipes[k] = true end
+        for k in pairs(p.recipes) do
+            local known = C.Recipe(k)
+            if not (known and known.prof and known.prof ~= profID) then recipes[k] = true end
+        end
     end
     local changed = isNew or not SameSet(p.recipes, recipes)
     local rankChanged = p.rank ~= info.skillLevel or p.max ~= info.maxSkillLevel
@@ -253,12 +283,39 @@ local function ScanKnownProfession(d, profID)
         if Knows(spellID) then recipes[spellID] = true end
     end
     for spellID in pairs(p.recipes or {}) do
-        if not static[spellID] then recipes[spellID] = true end
+        local known = C.Recipe(spellID)
+        if not static[spellID] and not (known and known.prof and known.prof ~= profID) then
+            recipes[spellID] = true
+        end
     end
     local changed = not SameSet(p.recipes, recipes)
     p.recipes = recipes
     p.scanned = GH.Now()
     p.partial = nil
+    return changed
+end
+
+-- Recipes saved under the wrong profession by an older scan: move them where they belong, or drop
+-- them if this character doesn't have that profession. Returns true when something changed.
+function S.Tidy()
+    local d = GH.MyData()
+    if not d then return false end
+    local changed = false
+    for profID, p in pairs(d.profs) do
+        for spellID in pairs(p.recipes or {}) do
+            local r = C.Recipe(spellID)
+            if r and r.prof and r.prof ~= profID then
+                p.recipes[spellID] = nil
+                local home = d.profs[r.prof]
+                if home then
+                    home.recipes = home.recipes or {}
+                    home.recipes[spellID] = true
+                end
+                changed = true
+            end
+        end
+    end
+    if changed then GH.dbg("tidied recipes filed under the wrong profession") end
     return changed
 end
 
@@ -269,6 +326,7 @@ function S.ScanKnown()
     local d = GH.MyData()
     if not d then return end
     local queue = {}
+    S.Tidy()
     for id in pairs(d.profs) do
         if not GATHERING_LINES[id] then queue[#queue + 1] = id end
     end
