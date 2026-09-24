@@ -3,7 +3,7 @@
 ## Category: YippYapp
 ## Notes: Your guild's crafting directory - who can make what, items guildies have, wanted posts and craft requests, synced between guildies. Part of YippYapp - addons for WoW: Forever that work even better together.
 ## Author: vebjorn
-## Version: 0.2.0-beta4
+## Version: 0.2.0-beta5
 ## SavedVariables: GuildhallDB
 ## SavedVariablesPerCharacter: GuildhallCharDB
 ## IconTexture: Interface\AddOns\Guildhall\Media\icon
@@ -26,6 +26,7 @@ Libs\LibForever-1.0\Windows.lua
 Libs\LibForever-1.0\Minimap.lua
 Libs\LibForever-1.0\Welcome.lua
 Libs\LibForever-1.0\Settings.lua
+Libs\LibForever-1.0\SelfTest.lua
 
 Core\Core.lua
 Data\Recipes.lua

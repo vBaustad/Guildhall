@@ -166,6 +166,24 @@ function I.Professions()
     return out
 end
 
+-- Item IDs guildies (not you) have posted as wanted. BagWarden uses this to keep them out of its
+-- delete suggestions; the index already leaves out blocked players.
+function I.WantedByOthers()
+    if dirty then I.Build() end
+    local me, out = GH.Me(), {}
+    for key, e in pairs(index) do
+        if type(key) == "number" then
+            for _, w in ipairs(e.wants) do
+                if w.owner ~= me then
+                    out[#out + 1] = key
+                    break
+                end
+            end
+        end
+    end
+    return out
+end
+
 function I.CountSet(t)
     local n = 0
     for _ in pairs(t or {}) do n = n + 1 end
@@ -396,12 +414,20 @@ end)
 -- ---------------------------------------------------------------------------
 -- /gh selftest: the crafter list, checked in game (there is no offline test runner).
 -- ---------------------------------------------------------------------------
-function GH.SelfTest()
-    local failed = 0
+-- Runs the checks. Prints a line per check unless quiet, and always returns (ok, message) so the
+-- shared "/yippyapp test" can report Guildhall in one line.
+function GH.SelfTest(quiet)
+    local failed, ran, firstFail = 0, 0, nil
     local function check(name, ok, detail)
-        if not ok then failed = failed + 1 end
-        GH.msg("%s %s%s", ok and "|cff60d060PASS|r" or "|cffff6060FAIL|r", name,
-            detail and (" - " .. detail) or "")
+        ran = ran + 1
+        if not ok then
+            failed = failed + 1
+            firstFail = firstFail or (name .. (detail and detail ~= "" and (" - " .. detail) or ""))
+        end
+        if not quiet then
+            GH.msg("%s %s%s", ok and "|cff60d060PASS|r" or "|cffff6060FAIL|r", name,
+                detail and detail ~= "" and (" - " .. detail) or "")
+        end
     end
 
     -- A character with two professions, one recipe wrongly filed under both: one row, right profession.
@@ -443,16 +469,18 @@ function GH.SelfTest()
 
     -- A guildie who answered on the addon channel stays "online" even when the guild roster is
     -- empty or lists only some members, which is normal on Forever (we never request the roster).
-    local fake = "Selftest Peer-Selftest"
-    local peers = GH.Sync.peers
-    local savedRoster = GH.roster
-    peers[fake] = { seen = GH.Now() }
+    -- Both answers are taken first, so the real roster is back in place before anything can fail.
+    local fakePeer = "Selftest Peer-Selftest"
+    local peers, savedRoster = GH.Sync.peers, GH.roster
+    peers[fakePeer] = { seen = GH.Now() }
     GH.roster = {}
-    check("heard from a guildie counts as online with an empty roster", GH.IsOnline(fake) == true)
-    peers[fake].seen = GH.Now() - 2 * 3600
-    check("a guildie not heard from for hours drops off again", GH.IsOnline(fake) == false)
-    peers[fake] = nil
+    local heardJustNow = GH.IsOnline(fakePeer)
+    peers[fakePeer].seen = GH.Now() - 2 * 3600
+    local heardHoursAgo = GH.IsOnline(fakePeer)
+    peers[fakePeer] = nil
     GH.roster = savedRoster
+    check("heard from a guildie counts as online with an empty roster", heardJustNow == true)
+    check("a guildie not heard from for hours drops off again", heardHoursAgo == false)
 
     -- The real index: nobody may appear twice for the same item.
     if dirty then I.Build() end
@@ -469,5 +497,17 @@ function GH.SelfTest()
     end
     check("no duplicate crafters in your guild's index", dupes == 0, ("%d duplicate(s)"):format(dupes))
 
-    GH.msg(failed == 0 and "|cff60d060selftest passed.|r" or ("|cffff6060selftest: %d failed.|r"):format(failed))
+    if not quiet then
+        GH.msg(failed == 0 and "|cff60d060selftest passed.|r" or ("|cffff6060selftest: %d failed.|r"):format(failed))
+    end
+    if failed == 0 then return true, ("%d checks passed"):format(ran) end
+    return false, ("%d of %d checks failed: %s"):format(failed, ran, firstFail or "?")
 end
+
+-- The shared "/yippyapp test" runs every addon's checks in one go. /gh selftest still prints them.
+GH.Listen("LOGIN", function()
+    local LIB = LibStub and LibStub("LibForever-1.0", true)
+    if LIB and LIB.RegisterSelfTest then
+        LIB.RegisterSelfTest("Guildhall", function() return GH.SelfTest(true) end)
+    end
+end)

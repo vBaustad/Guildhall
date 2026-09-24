@@ -11,6 +11,19 @@
 --   RQ  (WHISPER)  relay these owners' profiles to me.     -> PRO per owner (for offline guildies)
 --
 -- A relayed copy is marked "via" and replaced as soon as the owner sends their own.
+--
+-- Getting my own posts back after the client loses my saved data (see GH.StoreTrusted) runs across
+-- three files, so the whole of it is written down here:
+--   1. Core: MyData() creates an empty record and sets d.restorePending; GH.freshSelf mirrors it.
+--      A store the client never read sets it again 8 s after login, even if the record looked fine.
+--   2. Here: HI and YO carry "1" when fresh. A peer holding my profile answers with its copy (PRO,
+--      SendBackCopy) BEFORE asking for mine, and everything I publish while fresh carries the "F"
+--      header, which makes peers keep their own copy of my listings and wants (StoreProfile).
+--      RestoreSelf merges a returned copy into mine and bumps the revision with reason "restore".
+--   3. Core again: BumpRev("restore") clears restorePending; BumpRev("listings"/"wants") - a post I
+--      made myself - clears it too, but only once a restore has arrived or no peer is around to
+--      send one, so one new post can't wipe the rest.
+-- Orders take the same route through their own replay message (Orders.lua, OSY).
 local ADDON, GH = ...
 local C = GH.Codec
 local Sync = {}

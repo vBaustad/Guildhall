@@ -10,7 +10,6 @@ local FILTER_LABELS = { all = "Everything", crafts = "Crafts", listings = "Guild
 local CARD_W, CARD_H, GRID_GAP, CHIP_W = 340, 64, 10, 120
 -- Cooking, First Aid and Fishing sit apart from the crafting professions.
 local SECONDARY = { Cooking = true, ["First Aid"] = true, Fishing = true }
-local QUALITY_NAMES = { [0] = "Poor", "Common", "Uncommon", "Rare", "Epic" }
 
 local function Prefs()
     local st = GH.Settings()

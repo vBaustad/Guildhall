@@ -383,15 +383,9 @@ function GH.KnownGuildie(full)
     return GH.Sync and GH.Sync.peers[full] ~= nil
 end
 
-function GH.IsGuildie(full)
-    return GH.roster[full] ~= nil
-end
-
--- Chat messaging lockdown (a Midnight-era restriction that is active in Forever): addon chat
--- can be blocked in restricted content. Senders hold their messages until it lifts.
-function GH.InChatLockdown()
-    return C_ChatInfo and C_ChatInfo.InChatMessagingLockdown and C_ChatInfo.InChatMessagingLockdown() or false
-end
+-- No roster-only "is this a guildie" test any more: the roster can be empty or partial on Forever,
+-- and nothing may depend on it. Sync notices a refused message and retries instead of asking the
+-- game whether chat is locked down.
 
 local function RebuildRoster()
     local total = GetNumGuildMembers()

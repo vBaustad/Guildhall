@@ -241,3 +241,50 @@ end
 
 GH.On("BAG_UPDATE_DELAYED", function() GH.Debounce("listingCheck", 3, L.Check) end)
 GH.Listen("LOGIN", function() C_Timer.After(15, L.Check) end)
+
+-- ---------------------------------------------------------------------------
+-- BagWarden: items it must not offer for deletion
+-- ---------------------------------------------------------------------------
+-- BagWarden asks Keep(itemID) for every item it is about to suggest, while the bags are open, so the
+-- answer has to be quick. The reasons are worked out once and then reused until something changes -
+-- a new listing, a guildie's post, a craft request - so it is never a stale cache.
+local keep
+
+local function BuildKeep()
+    -- Built into a local first: asking the index can rebuild it, which clears this cache again.
+    local out = {}
+    local d = GH.MyData()
+    for _, l in ipairs(d and d.listings or {}) do
+        local id = C.ItemIdFromString(l.item)
+        if id then out[id] = "you listed this for your guild" end
+    end
+    -- Craft requests you took on: the item you promised someone.
+    local O = GH.Orders
+    for _, o in ipairs(O and O.Incoming() or {}) do
+        if not O.FINISHED[o.status] and type(o.item) == "number" and not out[o.item] then
+            out[o.item] = "you're crafting this for a guildie"
+        end
+    end
+    -- What guildies are after. Their posts only: your own are covered above.
+    for _, id in ipairs(GH.Index and GH.Index.WantedByOthers() or {}) do
+        if not out[id] then out[id] = "a guildie asked for this" end
+    end
+    keep = out
+    return out
+end
+
+function L.KeepReason(itemID)
+    if type(itemID) ~= "number" then return nil end
+    return (keep or BuildKeep())[itemID]
+end
+
+for _, event in ipairs({ "DATA_CHANGED", "ORDERS_CHANGED", "MY_DATA_CHANGED", "INDEX_BUILT" }) do
+    GH.Listen(event, function() keep = nil end)
+end
+
+GH.Listen("LOGIN", function()
+    local LIB = LibStub and LibStub("LibForever-1.0", true)
+    if LIB and LIB.ProvideData then
+        LIB.ProvideData("GuildhallWanted", { Keep = function(itemID) return L.KeepReason(itemID) end })
+    end
+end)

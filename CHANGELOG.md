@@ -1,5 +1,12 @@
 # Guildhall
 
+## 0.2.0-beta5
+
+- **BagWarden won't suggest deleting anything Guildhall is using.** Items you've listed for your guild,
+  items a guildie has posted as wanted, and anything you've taken on in a craft request are held back,
+  each with a short reason in BagWarden's tooltip.
+- Housekeeping: removed leftovers from the data-resilience work (two unused helpers and an unused table).
+
 ## 0.2.0-beta4
 
 - **Tougher against a guildie who sends nonsense.** Names that carry chat escape codes are rejected, a
