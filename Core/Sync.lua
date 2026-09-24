@@ -144,6 +144,16 @@ end
 -- ---------------------------------------------------------------------------
 -- Profiles
 -- ---------------------------------------------------------------------------
+-- The PRO header while my record is fresh: "F", and the item IDs I took down by hand since. Older
+-- clients read the third field and ignore anything after it, so this stays compatible both ways.
+local function FreshHeader()
+    if not GH.freshSelf then return "" end
+    local d = GH.MyData()
+    local parts = {}
+    for itemID in pairs(d and d.takedowns or {}) do parts[#parts + 1] = C.To36(itemID) end
+    return #parts > 0 and ("F	" .. table.concat(parts, ",")) or "F"
+end
+
 local function MyPayload()
     local d = GH.MyData()
     return C.EncodeProfile(d, GH.Listings.Publishable(), GH.Listings.PublishableWants())
@@ -199,7 +209,28 @@ function Sync.RestoreSelf(p, sender)
 end
 
 -- fresh: the owner's record started from scratch (see GH.freshSelf), so its posts may just be missing.
-local function StoreProfile(p, sender, fresh)
+-- Keep everything we hold for them except what they took down, then add anything they sent that we
+-- don't have. Order is theirs first, so their own list stays recognisable to them.
+local function MergePosts(held, sent, takedowns, cap)
+    local out, seen = {}, {}
+    for _, e in ipairs(sent or {}) do
+        local id = C.ItemIdFromString(e.item)
+        if id and not seen[id] and #out < cap then
+            seen[id] = true
+            out[#out + 1] = e
+        end
+    end
+    for _, e in ipairs(held or {}) do
+        local id = C.ItemIdFromString(e.item)
+        if id and not seen[id] and not (takedowns and takedowns[id]) and #out < cap then
+            seen[id] = true
+            out[#out + 1] = e
+        end
+    end
+    return out
+end
+
+local function StoreProfile(p, sender, fresh, takedowns)
     local g = GH.GuildDB()
     if not g or not p.owner then return end
     -- Revisions are timestamps: one from the future would lock out the owner's real updates.
@@ -225,11 +256,13 @@ local function StoreProfile(p, sender, fresh)
         for _ in pairs(g.members) do n = n + 1 end
         if n >= C.MAX_MEMBERS then return end
     end
-    -- A fresh profile brings professions and rev, but never wipes the posts we hold for them. Kept as
-    -- fresh (and relayed as such) until the owner publishes normally again.
+    -- A fresh profile means "I may not know about my own posts", not "I have none": what they send is
+    -- added to what we hold rather than replacing it. It never means "ignore what I say" - anything
+    -- they took down by hand (takedowns) is dropped here and now, and a post they made since is kept.
     p.fresh = fresh or nil
-    if fresh and cur and (#(cur.listings or {}) > 0 or #(cur.wants or {}) > 0) then
-        p.listings, p.wants = cur.listings, cur.wants
+    if fresh and cur then
+        p.listings = MergePosts(cur.listings, p.listings, takedowns, C.MAX_LISTINGS)
+        p.wants = MergePosts(cur.wants, p.wants, takedowns, C.MAX_WANTS)
     end
     p.received = GH.Now()
     p.stale = nil
@@ -271,7 +304,7 @@ end
 
 function Sync.Publish()
     if not helloSent or not IsInGuild() then return end
-    Sync.Send(join("PRO", PROTO, GH.freshSelf and "F" or ""), MyPayload(), "GUILD", nil, "BULK")
+    Sync.Send(join("PRO", PROTO, FreshHeader()), MyPayload(), "GUILD", nil, "BULK")
     GH.dbg("published profile")
 end
 
@@ -318,12 +351,22 @@ end
 
 H.GET = function(_, _, sender)
     if RateLimited("GET", sender, 30) then return end
-    Sync.Send(join("PRO", PROTO, GH.freshSelf and "F" or ""), MyPayload(), "WHISPER", sender, "BULK")
+    Sync.Send(join("PRO", PROTO, FreshHeader()), MyPayload(), "WHISPER", sender, "BULK")
 end
 
 H.PRO = function(f, body, sender)
     local p = C.DecodeProfile(body)
-    if p then StoreProfile(p, sender, f[3] == "F") end
+    if not p then return end
+    -- Fourth header field: item IDs the owner took down by hand while their record is fresh.
+    local takedowns
+    if f[3] == "F" and f[4] and f[4] ~= "" then
+        takedowns = {}
+        for w in f[4]:gmatch("[^,]+") do
+            local id = C.From36(w)
+            if id then takedowns[id] = true end
+        end
+    end
+    StoreProfile(p, sender, f[3] == "F", takedowns)
 end
 
 H.MQ = function(_, _, sender)

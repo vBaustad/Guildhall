@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Your first login doesn't look like a disaster any more.** An empty Guildhall used to mean "something
+  was lost", which on a fixed client is simply a new player: no warning is shown, nothing is asked of
+  your guild, and your profile is published normally from the start. The warning is still there for the
+  clients that really do drop addon settings, and for a character that has used Guildhall here before.
+- **Taking down one of your own posts always reaches your guildies.** While Guildhall is waiting for
+  guildies to send back posts it may have lost, it asks them to keep what they hold for you - but that
+  never applies to something you removed by hand: that travels with your profile and is dropped
+  everywhere. A post you make in the meantime shows up for them straight away too, instead of waiting.
+  As a backstop, the waiting ends a couple of minutes after login in any case.
+- Herbalism, Mining, Fishing and Skinning keep their names, even though the recipe data no longer lists
+  the professions that teach no recipes.
 - **The Whisper buttons work with two-part names.** Every name on WoW: Forever is "First Last", and
   Guildhall opened whispers by typing "/w Name Surname ..." into the chat box - so the surname was read
   as the start of the message and the whisper went to the first name. It now hands the name to the chat

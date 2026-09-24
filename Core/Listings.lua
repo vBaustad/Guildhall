@@ -51,6 +51,7 @@ function L.Remove(id)
     if not d then return end
     for i, l in ipairs(d.listings) do
         if l.id == id then
+            GH.NoteTakedown(C.ItemIdFromString(l.item))
             table.remove(d.listings, i)
             GH.BumpRev("listings")
             return
@@ -146,6 +147,7 @@ function L.RemoveWant(id)
     if not d then return end
     for i, w in ipairs(d.wants) do
         if w.id == id then
+            GH.NoteTakedown(C.ItemIdFromString(w.item))
             table.remove(d.wants, i)
             GH.BumpRev("wants")
             return

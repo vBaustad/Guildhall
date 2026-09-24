@@ -30,6 +30,11 @@ local function CountSet(t)
 end
 S.CountSet = CountSet
 
+-- Skill lines the generated recipe data doesn't list, because they teach no recipes. We still receive
+-- them from guildies (a rank, no recipes), so they still need a name - "Profession 356" is what the
+-- Fishing card looked like before. Ours is the last word after the client and the data file.
+local NO_RECIPE_LINES = { [182] = "Herbalism", [186] = "Mining", [356] = "Fishing", [393] = "Skinning" }
+
 -- The client can name a skill line even when we've never opened it: ask it once, then remember.
 local function AskClientForName(id)
     local name = C_TradeSkillUI and C_TradeSkillUI.GetTradeSkillDisplayName
@@ -54,7 +59,7 @@ function GH.ProfNameOrNil(id)
         db.profNames[id] = name
         return name
     end
-    return GH.Data and GH.Data.professions and GH.Data.professions[id] or nil
+    return (GH.Data and GH.Data.professions and GH.Data.professions[id]) or NO_RECIPE_LINES[id] or nil
 end
 
 function GH.ProfName(id)

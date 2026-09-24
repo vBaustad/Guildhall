@@ -270,6 +270,10 @@ function GH.MyData()
     return d
 end
 
+-- How long after login a guildie's copy of my posts may still turn up. Until then my own edits
+-- don't end "fresh" mode; after it, they do.
+local RESTORE_WINDOW = 120
+
 -- Something in my own data changed: bump the revision so guildies know to fetch it.
 local function Sync_PeerCount()
     return GH.Sync and GH.Sync.PeerCount and GH.Sync.PeerCount() or 0
@@ -283,18 +287,28 @@ function GH.StoreTrusted()
     return true
 end
 
+-- Can this client lose saved variables at all? On a fixed one (build 70009 and up) an empty store
+-- means a new player, not lost data - and a new player must not be treated as a victim. The library
+-- owns the build check; an unreadable build counts as fixed, so we stay quiet rather than lie.
+function GH.CanLoseData()
+    return LIB ~= nil and LIB.SavedVariablesBugPossible ~= nil and LIB.SavedVariablesBugPossible()
+end
+
 function GH.BumpRev(reason)
     local d = GH.MyData()
     if not d then return end
     d.rev = math.max((d.rev or 0) + 1, GH.Now())
-    -- Posting or removing something myself makes my own list the truth - but not while guildies are
-    -- still expected to send back what they hold, or one new post would wipe the rest of my old ones.
+    -- Posting or removing something myself makes my own list the truth - but not in the first
+    -- minutes after login, while guildies may still be sending back what they hold, or one new post
+    -- would wipe the rest of my old ones. After that window nothing more is coming: a brand-new
+    -- install looks the same from in here, and its owner must be able to remove a post again.
+    local waited = GH.loginAt and (GetTime() - GH.loginAt) > RESTORE_WINDOW
     if (reason == "listings" or reason == "wants")
-        and (GH.restoredThisSession or not GH.Sync or Sync_PeerCount() == 0) then
-        d.restorePending, GH.freshSelf = nil, nil
+        and (GH.restoredThisSession or waited or not GH.Sync or Sync_PeerCount() == 0) then
+        d.restorePending, GH.freshSelf, d.takedowns = nil, nil, nil
         GH.restoreClosed = true
     elseif reason == "restore" then
-        d.restorePending, GH.freshSelf = nil, nil
+        d.restorePending, GH.freshSelf, d.takedowns = nil, nil, nil
     end
     GH.Fire("MY_DATA_CHANGED", reason)
     GH.Fire("DATA_CHANGED")
@@ -342,6 +356,30 @@ function GH.NoShareList()
     for id in pairs(GH.DB().noShare) do list[#list + 1] = id end
     table.sort(list)
     return list
+end
+
+-- While my record is fresh, my silence about a post means "I may not know about it", so guildies
+-- keep their copy. Taking a post down is not silence: it's the clearest thing I can say about my own
+-- data, and it must always win. These are the item IDs I removed by hand while fresh; they travel
+-- with my profile so guildies drop exactly those and keep the rest.
+local MAX_TAKEDOWNS = 20
+
+function GH.NoteTakedown(itemID)
+    if not itemID or not GH.freshSelf then return end
+    local d = GH.MyData()
+    if not d then return end
+    d.takedowns = d.takedowns or {}
+    if d.takedowns[itemID] then return end
+    local n = 0
+    for _ in pairs(d.takedowns) do n = n + 1 end
+    if n >= MAX_TAKEDOWNS then return end
+    d.takedowns[itemID] = true
+end
+
+-- They are only needed until the guild has seen them, which is as long as fresh mode lasts.
+function GH.ClearTakedowns()
+    local d = GH.MyData()
+    if d then d.takedowns = nil end
 end
 
 function GH.NextId()
@@ -494,6 +532,7 @@ end)
 -- Startup
 -- ---------------------------------------------------------------------------
 GH.On("PLAYER_LOGIN", function()
+    GH.loginAt = GetTime()
     if not C_Weather then
         GH.msg("|cffff6060made for WoW: Forever only - it won't work properly in this version of the game.|r")
     end
@@ -509,14 +548,31 @@ GH.On("PLAYER_LOGIN", function()
     -- Let LibForever compare our table with the other YippYapp addons': if none of them loaded, the
     -- client dropped them all. It says so once for the whole family, so we stay quiet then.
     if LIB and LIB.RegisterSavedTable then LIB.RegisterSavedTable(GuildhallDB) end
+    -- Two questions, two sources. The marker decides WHAT we say: it is written at every login, so
+    -- only a character that has been here before can have lost anything, and a first login sees
+    -- nothing. The client build decides HOW we say it: telling someone to restart a client where a
+    -- restart cannot help is how a message becomes one people learn to ignore.
     if lost and GH.StoreTrusted() then
-        GH.msg("|cffff6060saved data didn't load - fully restart the game (not /reload). Guildies online will send back what they have.|r")
+        if GH.CanLoseData() then
+            GH.msg("|cffff6060saved data didn't load - fully restart the game (not /reload). Guildies online will send back what they have.|r")
+        else
+            GH.msg("|cffff6060your saved Guildhall data is gone. Guildies online will send back what they have.|r")
+        end
+    end
+    -- An empty record has two very different meanings. "Lost" only counts when this character has
+    -- been here before, or when the client is one that drops saved variables. Otherwise this is
+    -- someone's first login: publish normally, ask nobody for anything, and let the guild see a new
+    -- member rather than a member who thinks they lost something.
+    local d = GH.MyData()
+    if d and d.restorePending and not lost and not GH.CanLoseData() then
+        d.restorePending, GH.freshSelf = nil, nil
+        GH.dbg("new here: nothing to restore, publishing normally")
     end
     -- A store the client never read is not the truth about what I share: keep publishing as "fresh"
     -- so guildies keep their copy of my posts, and take back what they hold.
     -- After the library's check has run, and after our own hello has gone out with the old flag.
     C_Timer.After(8, function()
-        if not GH.StoreTrusted() then
+        if not GH.StoreTrusted() and GH.CanLoseData() then
             local d = GH.MyData()
             if d and not GH.restoreClosed then
                 d.restorePending, GH.freshSelf = true, true
