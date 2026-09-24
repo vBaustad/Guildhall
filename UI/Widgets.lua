@@ -249,26 +249,40 @@ function U.KeyIcon(parent, size)
 end
 
 -- Open a whisper to someone, optionally with an item link typed in.
-function U.Whisper(full, key)
-    local target = GH.WhisperName(full) or GH.Short(full)
-    local link = key and C.KeyLink(key)
-    local text = "/w " .. target .. " " .. (link and (link .. " ") or "")
-    if ChatFrameUtil and ChatFrameUtil.OpenChat then
-        ChatFrameUtil.OpenChat(text)
-    elseif ChatFrame_OpenChat then
-        ChatFrame_OpenChat(text)
+-- Open the chat box addressed to someone, with the message ready to send (they press Enter).
+-- Never by typing "/w <name> ...": every name on Forever is "First Last", and the chat box would
+-- read the surname as the start of the message and whisper the first name instead. SendTell hands
+-- the target over as a target, the way Blizzard's own UI does, so a space in the name is fine.
+local function OpenWhisper(target, text)
+    if not target then return end
+    text = text or ""
+    if ChatFrame_SendTellWithMessage then
+        ChatFrame_SendTellWithMessage(target, text)
+        return
     end
-end
-
--- Open a whisper with the text already typed in (the player still presses Enter).
-function U.WhisperText(full, text)
-    local target = GH.WhisperName(full) or GH.Short(full)
-    local line = "/w " .. target .. " " .. (text or "")
+    if ChatFrame_SendTell then
+        ChatFrame_SendTell(target)
+        local box = ChatEdit_ChooseBoxForSend and ChatEdit_ChooseBoxForSend()
+        if box and text ~= "" then box:Insert(text) end
+        return
+    end
+    -- Last resort on a client without either: only correct for a one-word name.
+    local line = "/w " .. target .. " " .. text
     if ChatFrameUtil and ChatFrameUtil.OpenChat then
         ChatFrameUtil.OpenChat(line)
     elseif ChatFrame_OpenChat then
         ChatFrame_OpenChat(line)
     end
+end
+
+function U.Whisper(full, key)
+    local link = key and C.KeyLink(key)
+    OpenWhisper(GH.WhisperName(full) or full, link and (link .. " ") or "")
+end
+
+-- Open a whisper with the text already typed in (the player still presses Enter).
+function U.WhisperText(full, text)
+    OpenWhisper(GH.WhisperName(full) or full, text)
 end
 
 -- A small gold text link, for secondary actions that shouldn't look like the main button.

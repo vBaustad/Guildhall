@@ -1,5 +1,21 @@
 # Guildhall
 
+## Unreleased
+
+- **The Whisper buttons work with two-part names.** Every name on WoW: Forever is "First Last", and
+  Guildhall opened whispers by typing "/w Name Surname ..." into the chat box - so the surname was read
+  as the start of the message and the whisper went to the first name. It now hands the name to the chat
+  box as a target, the way the game's own UI does.
+- Guildhall follows your "show surnames" setting when it shows a name. What it stores and compares is
+  always the full name, so hiding surnames can never split a guildie into two.
+- `/gh selftest` checks that nobody is stored under both a short and a full name, and the new
+  `/gh names` shows what the game, the guild roster and the addon channel each call people.
+- **A guild is one guild again, whatever realm you're on.** Guildhall built the key it stores your guild's
+  data under from the realm name in two different spellings ("Bleeding Hollow" and "BleedingHollow"),
+  so the same guild could end up saved twice and two members wouldn't recognise each other's data.
+  Anything saved under the old spelling is merged into one store at login - nothing is replaced, and
+  whichever copy knows more about a guildie or a request is the one kept.
+
 ## 0.2.0-beta6
 
 - Keeping BagWarden's suggestions honest no longer gets slower as your guild grows: the list of items

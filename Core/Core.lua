@@ -97,8 +97,19 @@ end
 -- ---------------------------------------------------------------------------
 -- Names
 -- ---------------------------------------------------------------------------
+-- One spelling of a realm, whatever the game hands us: GetGuildInfo returns it raw ("Bleeding
+-- Hollow"), GetNormalizedRealmName returns it packed ("BleedingHollow"). Keys are built from the
+-- packed form only, or the same guild ends up stored twice.
+-- Temporary: both helpers go away for LIB.NormalizeRealm / LIB.Realm once LibForever 1.0.6 is
+-- tagged and embedded here.
+local function NormalizeRealm(realm)
+    -- The parentheses matter: gsub also returns a count, which would leak into every caller.
+    return (tostring(realm or ""):gsub("[%s%-']", ""))
+end
+GH.NormalizeRealm = NormalizeRealm
+
 function GH.Realm()
-    return GetNormalizedRealmName() or (GetRealmName() or ""):gsub("[%s%-]", "")
+    return GetNormalizedRealmName() or NormalizeRealm(GetRealmName())
 end
 
 -- Always "Name-Realm", the form addon messages and the guild roster use.
@@ -117,10 +128,17 @@ function GH.Me()
     return GH._me
 end
 
--- Drop the realm for display when it is our own.
+-- Name for display: drops our own realm, and the surname when the player has chosen to hide those.
+-- Display only - what gets stored and compared is always the full "Name-Realm".
 function GH.Short(full)
     if not full then return "?" end
-    return Ambiguate(full, "none")
+    local LIB = LibStub and LibStub("LibForever-1.0", true)
+    if LIB and LIB.ShortName then return LIB.ShortName(full) end
+    local short = Ambiguate(full, "none")
+    if C_PlayerInfo and C_PlayerInfo.ShouldDisplaySurname and not C_PlayerInfo.ShouldDisplaySurname() then
+        short = short:match("^(%S+)") or short
+    end
+    return short
 end
 
 -- Whispers and addon whispers must use the plain name for someone on our own realm: the server
@@ -343,7 +361,49 @@ function GH.GuildKey()
     if not IsInGuild() then return nil end
     local name, _, _, realm = GetGuildInfo("player")
     if not name then return nil end
-    return name .. "-" .. (realm or GH.Realm())
+    -- GetGuildInfo gives the realm raw and only for a guild from another realm; GH.Realm() gives it
+    -- packed. Both go through the same normaliser, so one guild is always one key.
+    return name .. "-" .. NormalizeRealm(realm or GH.Realm())
+end
+
+-- Guild stores saved under a raw-realm key by an older build ("Name-Bleeding Hollow"): fold them
+-- into the packed key. A merge, never a replace - whichever copy knows more about a guildie or a
+-- request wins, and nothing the player still has is thrown away.
+function GH.MergeGuildKeys()
+    local guilds = GH.DB().guilds
+    local mine = GH.GuildName()
+    for key, src in pairs(guilds) do
+        -- Split off the realm. For the guild we're in, the guild's own name says where to cut, so a
+        -- realm with a hyphen in it ("Kirin-Tor") is handled too; otherwise cut at the last hyphen.
+        local name, realm
+        if mine and key:sub(1, #mine + 1) == mine .. "-" then
+            name, realm = mine, key:sub(#mine + 2)
+        else
+            name, realm = key:match("^(.*)%-([^%-]+)$")
+        end
+        local packed = name and (name .. "-" .. NormalizeRealm(realm))
+        if packed and packed ~= key then
+            local dst = guilds[packed]
+            if not dst then
+                guilds[packed] = src
+            else
+                dst.members = dst.members or {}
+                for owner, p in pairs(src.members or {}) do
+                    local cur = dst.members[owner]
+                    if not cur or (p.rev or 0) > (cur.rev or 0) then dst.members[owner] = p end
+                end
+                for _, side in ipairs({ "incoming", "outgoing" }) do
+                    dst[side] = dst[side] or {}
+                    for oid, o in pairs(src[side] or {}) do
+                        local cur = dst[side][oid]
+                        if not cur or (o.updated or 0) > (cur.updated or 0) then dst[side][oid] = o end
+                    end
+                end
+            end
+            guilds[key] = nil
+            GH.dbg("merged guild store %s into %s", key, packed)
+        end
+    end
 end
 
 function GH.GuildName()
@@ -357,7 +417,7 @@ function GH.GuildDB()
     local guilds = GH.DB().guilds
     local g = guilds[key]
     if not g then
-        g = { members = {}, orders = {} }
+        g = { members = {} }
         guilds[key] = g
     end
     return g
@@ -444,6 +504,7 @@ GH.On("PLAYER_LOGIN", function()
     local lost = GuildhallDB == nil and GuildhallCharDB.used
     GuildhallCharDB.used = true
     GH.DB()
+    GH.MergeGuildKeys()
     GH.MyData()
     -- Let LibForever compare our table with the other YippYapp addons': if none of them loaded, the
     -- client dropped them all. It says so once for the whole family, so we stay quiet then.
@@ -508,6 +569,24 @@ SlashCmdList.GUILDHALL = function(input)
             GH.lastForcedSync = now
             GH.Sync.Hello(true)
         end
+    elseif cmd == "names" then
+        -- What each source calls people: the client, the guild roster and the addon channel have to
+        -- agree, or the same guildie is stored twice (surnames can be hidden on Forever).
+        local shown = C_PlayerInfo and C_PlayerInfo.ShouldDisplaySurname
+        GH.msg("you are %s; the game calls you %s; surnames shown: %s.", tostring(GH.Me()),
+            tostring(UnitName("player")),
+            shown and tostring(C_PlayerInfo.ShouldDisplaySurname()) or "unknown")
+        local roster, peers = {}, {}
+        for full in pairs(GH.roster) do
+            roster[#roster + 1] = full
+            if #roster >= 3 then break end
+        end
+        for full in pairs(GH.Sync and GH.Sync.peers or {}) do
+            peers[#peers + 1] = full
+            if #peers >= 3 then break end
+        end
+        GH.msg("roster says: %s", #roster > 0 and table.concat(roster, ", ") or "nothing yet")
+        GH.msg("the addon channel says: %s", #peers > 0 and table.concat(peers, ", ") or "nobody yet")
     elseif cmd == "selftest" then
         if GH.SelfTest then GH.SelfTest() end
     elseif cmd == "debug" then

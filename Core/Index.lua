@@ -476,6 +476,22 @@ function GH.SelfTest(quiet)
     check("heard from a guildie counts as online with an empty roster", heardJustNow == true)
     check("a guildie not heard from for hours drops off again", heardHoursAgo == false)
 
+    -- Names on Forever are "First Last" and the surname can be hidden. Hiding it is meant to be a
+    -- display choice, but if a short name ever reached storage we'd hold the same person twice, under
+    -- "Lorr-Realm" and "Lorr Den-Realm", and the two copies would never find each other.
+    local g = GH.GuildDB()
+    local byFirst, split = {}, {}
+    for owner in pairs(g and g.members or {}) do
+        local first = owner:match("^(%S+)")
+        local key = (first or owner) .. "|" .. (owner:match("%-(.+)$") or "")
+        local seen = byFirst[key]
+        if seen and (seen:find(" ") ~= nil) ~= (owner:find(" ") ~= nil) then
+            split[#split + 1] = seen .. " / " .. owner
+        end
+        byFirst[key] = owner
+    end
+    check("nobody is stored under both a short and a full name", #split == 0, table.concat(split, ", "))
+
     -- The real index: nobody may appear twice for the same item.
     if dirty then I.Build() end
     local dupes = 0
