@@ -1,5 +1,11 @@
 # Guildhall
 
+## 0.2.0-beta6
+
+- Keeping BagWarden's suggestions honest no longer gets slower as your guild grows: the list of items
+  guildies want is gathered while Guildhall builds its search index, instead of being worked out again
+  from the whole index each time something changes.
+
 ## 0.2.0-beta5
 
 - **BagWarden won't suggest deleting anything Guildhall is using.** Items you've listed for your guild,

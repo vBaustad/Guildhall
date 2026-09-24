@@ -5,6 +5,7 @@ local I = {}
 GH.Index = I
 
 local index = {}      -- [key] = { key, crafters = {...}, listings = {...}, wants = {...} }
+local wantedByOthers = {}   -- item IDs guildies have posted as wanted, collected while building
 local dirty = true
 
 -- Rebuilding walks every stored profile, so it never runs inside a tooltip hook or in combat:
@@ -77,17 +78,20 @@ local function AddProfile(p, listings, wants)
             list[#list + 1] = { owner = p.owner, class = p.class, l = l, stale = not GH.Listings.IsFresh(l) }
         end
     end
+    local me = GH.Me()
     for _, w in ipairs(wants or {}) do
         local id = C.ItemIdFromString(w.item)
         if id and GH.Listings.IsFresh(w, true) then
             local list = Entry(id).wants
             list[#list + 1] = { owner = p.owner, class = p.class, w = w }
+            if p.owner ~= me then wantedByOthers[#wantedByOthers + 1] = id end
         end
     end
 end
 
 function I.Build()
     wipe(index)
+    wipe(wantedByOthers)
     -- Right after login the guild name can still be unknown: stay dirty so the next search or
     -- GUILD_CHANGED builds it for real, instead of keeping an empty index.
     local g = GH.GuildDB()
@@ -166,22 +170,12 @@ function I.Professions()
     return out
 end
 
--- Item IDs guildies (not you) have posted as wanted. BagWarden uses this to keep them out of its
--- delete suggestions; the index already leaves out blocked players.
+-- Item IDs guildies (not you) have posted as wanted, gathered while the index is built rather than
+-- by walking it again. BagWarden uses this to keep them out of its delete suggestions; the index
+-- already leaves out blocked players. The table belongs to the index: read it, don't change it.
 function I.WantedByOthers()
     if dirty then I.Build() end
-    local me, out = GH.Me(), {}
-    for key, e in pairs(index) do
-        if type(key) == "number" then
-            for _, w in ipairs(e.wants) do
-                if w.owner ~= me then
-                    out[#out + 1] = key
-                    break
-                end
-            end
-        end
-    end
-    return out
+    return wantedByOthers
 end
 
 function I.CountSet(t)
