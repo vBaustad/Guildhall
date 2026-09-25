@@ -119,8 +119,15 @@ function GH.FullName(name)
     return name
 end
 
+-- Who I am, as "Name-Realm". UnitName's second value is a SURNAME on Forever, not a realm, so a key
+-- built from the first value alone drops half the name - and the guild channel uses the whole of it.
+-- The library owns that composition (LIB.Me -> LIB.UnitKey); ours is only for a client without it.
 function GH.Me()
     if not GH._me then
+        if LIB and LIB.Me then
+            GH._me = LIB.Me()
+            if GH._me then return GH._me end
+        end
         local n = UnitName("player")
         if not n or n == UNKNOWNOBJECT then return nil end
         GH._me = GH.FullName(n)
@@ -515,9 +522,52 @@ local function MergeCharRecord(short, full)
     return out
 end
 
+-- Another of MY characters whose first name matches, and who has a surname of their own: then the
+-- short record could belong to either of us, and nobody should guess.
+local function SharedFirstName(db, key, me)
+    -- Split the realm off first: a key is "First Last-Realm", and the realm has no space in it, so
+    -- looking for a first name in the whole key would just find the key.
+    local function parts(full)
+        local name, realm = full:match("^(.*)%-([^%-]+)$")
+        return name or full, realm or ""
+    end
+    local name, realm = parts(key)
+    local first = name:match("^%S+")
+    for other in pairs(db.chars) do
+        local otherName, otherRealm = parts(other)
+        if other ~= key and other ~= me and otherRealm == realm
+            and otherName:match("^%S+") == first and otherName:find(" ", 1, true) then
+            return other
+        end
+    end
+    return nil
+end
+
 function GH.MergeCharNames()
     local db = GH.DB()
     wipe(GH.ambiguousNames)
+    local me = GH.Me()
+    -- The library knows which stored keys are the character we are playing, including the short form
+    -- older builds wrote. Only ever used on our OWN records: "Duplo" and "Duplo Bonk" can be two
+    -- different players, and that is a guess only safe to make about yourself.
+    if me and LIB and LIB.IsMyStoredName then
+        for key, rec in pairs(db.chars) do
+            if key ~= me and LIB.IsMyStoredName(key) then
+                local clash = SharedFirstName(db, key, me)
+                if clash then
+                    GH.ambiguousNames[#GH.ambiguousNames + 1] = key .. " -> " .. me .. " / " .. clash
+                else
+                    db.chars[me] = db.chars[me] and MergeCharRecord(rec, db.chars[me]) or rec
+                    db.chars[me].owner = me
+                    db.chars[key] = nil
+                    GH.RenameOwner(key, me)
+                    GH.dbg("merged %s into %s", key, me)
+                end
+            end
+        end
+        return
+    end
+    -- Without the library: pair a short name with its one full counterpart, and nothing else.
     for key, short in pairs(db.chars) do
         local name, realm = key:match("^(.*)%-([^%-]+)$")
         if name and realm and not name:find(" ", 1, true) then
