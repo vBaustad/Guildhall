@@ -60,8 +60,11 @@ local function Build(f, extraButton)
 
     -- Most-used first: what you see on items, then what pings you, then your own listings.
     heading("Item tooltips")
-    checkbox("Show guild crafters and listings on item tooltips",
-        "Hover any item to see which guildies can craft it, who has one to spare and who wants one.", "tooltip")
+    checkbox("Show guildies who have one, and who wants one",
+        "Hover any item to see who in the guild has one to spare and who has asked for one.", "tooltip")
+    checkbox("Also show which guildies can craft it",
+        "Off by default: this is the longest line, and item tooltips turn up everywhere. Browse and "
+        .. "search always show crafters, whatever this is set to.", "tooltipCrafters")
 
     heading("Notifications")
     checkbox("Notify me when a guildie asks me to craft something",

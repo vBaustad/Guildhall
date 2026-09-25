@@ -379,7 +379,7 @@ local function AddTooltipLines(tt, itemID)
     if not e then return end
     tt.guildhallDone = true
     local shown = false
-    if #e.crafters > 0 then
+    if #e.crafters > 0 and GH.Settings().tooltipCrafters then
         tt:AddLine("|cffe6b34dGuild crafters:|r " .. NameList(e.crafters, 4), 1, 1, 1, true)
         shown = true
     end

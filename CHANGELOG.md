@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Item tooltips no longer say who can craft something unless you ask them to.** That line is off by
+  default now - a tooltip turns up over everything, whether or not you wanted it. Turn it on under
+  Settings, where it sits next to the line about who has one to spare and who wants one, which is
+  unchanged. If you had already turned tooltips on, that choice is kept; only the crafter line is new
+  and off.
 - `/gh names` now also reports what the guild roster calls you. If that differs from the name Guildhall
   uses, it says so plainly: everything saved under ours moves across once the name is right. The
   "everything is under one name" line says which name it means, instead of reading as "all is well".

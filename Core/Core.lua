@@ -222,7 +222,12 @@ end
 -- Saved variables
 -- ---------------------------------------------------------------------------
 local SETTING_DEFAULTS = {
-    tooltip = true,          -- guild crafters / listings on item tooltips
+    tooltip = true,          -- item tooltips: who has one to spare, who wants one
+    -- Who can craft it is off unless you ask for it. A tooltip is the most intrusive place an addon
+    -- can write - it appears over everything, on every item, without being asked - and this is the
+    -- longest of the three lines. Existing settings are never overwritten (see GH.DB), so someone who
+    -- has turned it on keeps it on.
+    tooltipCrafters = false,
     -- The minimap button lives in settings.minimap (LibDBIcon's format). Old minimapAngle/hideMinimap
     -- values are migrated once by UI/Minimap.lua, so they have no defaults here.
     notifyRequests = true,   -- chat + sound when someone asks you to craft
