@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **One character, one record.** Everyone on WoW: Forever is "First Last", and Guildhall used to save
+  you under your first name alone while your guild knew you by both - so the same character ended up
+  with two sets of professions, posts and craft requests, and each session wrote to whichever one it
+  happened to produce. The two are merged at login: the highest skill and the newest revision win, no
+  post or request is thrown away, and your craft requests keep working under your full name. If two
+  characters share a first name, Guildhall leaves both alone and says so in `/gh selftest` rather than
+  guessing which is which.
 - **Your first login doesn't look like a disaster any more.** An empty Guildhall used to mean "something
   was lost", which on a fixed client is simply a new player: no warning is shown, nothing is asked of
   your guild, and your profile is published normally from the start. The warning is still there for the

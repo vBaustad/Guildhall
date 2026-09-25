@@ -492,6 +492,12 @@ function GH.SelfTest(quiet)
     end
     check("nobody is stored under both a short and a full name", #split == 0, table.concat(split, ", "))
 
+    -- Your own characters: the same split, from the days a build read only the first half of your
+    -- name. The migration folds them together unless it can't tell who is who, and those it refused
+    -- to touch are named here rather than merged behind your back.
+    check("your own characters are each stored once",
+        #(GH.ambiguousNames or {}) == 0, table.concat(GH.ambiguousNames or {}, ", "))
+
     -- The real index: nobody may appear twice for the same item.
     if dirty then I.Build() end
     local dupes = 0

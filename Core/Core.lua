@@ -444,6 +444,137 @@ function GH.MergeGuildKeys()
     end
 end
 
+
+-- ---------------------------------------------------------------------------
+-- One character, one record
+-- ---------------------------------------------------------------------------
+-- Everyone on Forever is "First Last", and UnitName hands the surname back as a second value - the
+-- slot a realm used to sit in. A build that read only the first value saved this character as
+-- "Duplo-Realm" while the guild channel called them "Duplo Bonk-Realm", so the same character ended
+-- up with two records and each session wrote to whichever one the code of the day produced.
+-- This folds the short one into the full one. It pairs ONLY when a short name has exactly one full
+-- counterpart on the same realm: "Duplo" next to both "Duplo Bonk" and "Duplo Svend" is two real
+-- characters, and merging the wrong person's guild data is worse than leaving both alone.
+-- GH.ambiguousNames lists whatever it refused to touch, and /gh selftest reports it.
+GH.ambiguousNames = {}
+
+local function NewerOf(a, b)
+    if (a.rev or 0) >= (b.rev or 0) then return a, b end
+    return b, a
+end
+
+local function MergeCharRecord(short, full)
+    local newer, older = NewerOf(short, full)
+    local out = {}
+    for k, v in pairs(older) do out[k] = v end
+    for k, v in pairs(newer) do out[k] = v end
+    out.nextId = math.max(short.nextId or 1, full.nextId or 1)
+    out.rev = math.max(short.rev or 0, full.rev or 0)
+    -- Professions: keep every profession either record knows, and every recipe within it. Recipes are
+    -- only ever learned, so a union can't resurrect something the character has forgotten.
+    out.profs = {}
+    for _, src in ipairs({ older.profs or {}, newer.profs or {} }) do
+        for id, prof in pairs(src) do
+            local have = out.profs[id]
+            if not have then
+                out.profs[id] = prof
+            else
+                if (prof.scanned or 0) >= (have.scanned or 0) then
+                    prof.recipes = prof.recipes or have.recipes
+                    for spell in pairs(have.recipes or {}) do
+                        if prof.recipes then prof.recipes[spell] = true end
+                    end
+                    out.profs[id] = prof
+                else
+                    for spell in pairs(prof.recipes or {}) do
+                        if have.recipes then have.recipes[spell] = true end
+                    end
+                end
+            end
+        end
+    end
+    -- Posts: everything both records hold, once each, under the caps.
+    for _, field in ipairs({ "listings", "wants" }) do
+        local cap = field == "listings" and C.MAX_LISTINGS or C.MAX_WANTS
+        local list, seen = {}, {}
+        for _, src in ipairs({ newer[field] or {}, older[field] or {} }) do
+            for _, e in ipairs(src) do
+                local id = C.ItemIdFromString(e.item) or e.item
+                if not seen[id] and #list < cap then
+                    seen[id] = true
+                    list[#list + 1] = e
+                end
+            end
+        end
+        out[field] = list
+    end
+    -- "Waiting for guildies to send my posts back" belongs to the record that is being written now.
+    -- The split is why it never ended on the abandoned one; it must not be inherited.
+    out.restorePending = newer.restorePending
+    out.takedowns = newer.restorePending and newer.takedowns or nil
+    return out
+end
+
+function GH.MergeCharNames()
+    local db = GH.DB()
+    wipe(GH.ambiguousNames)
+    for key, short in pairs(db.chars) do
+        local name, realm = key:match("^(.*)%-([^%-]+)$")
+        if name and realm and not name:find(" ", 1, true) then
+            local matches = {}
+            for other in pairs(db.chars) do
+                if other ~= key and other:sub(1, #name + 1) == name .. " "
+                    and other:match("%-([^%-]+)$") == realm then
+                    matches[#matches + 1] = other
+                end
+            end
+            if #matches == 1 then
+                local full = matches[1]
+                db.chars[full] = MergeCharRecord(short, db.chars[full])
+                db.chars[full].owner = full
+                db.chars[key] = nil
+                GH.RenameOwner(key, full)
+                GH.dbg("merged %s into %s", key, full)
+            elseif #matches > 1 then
+                GH.ambiguousNames[#GH.ambiguousNames + 1] = key .. " -> " .. table.concat(matches, " / ")
+            end
+        end
+    end
+end
+
+-- Everything else that stores a character by name: a profile a guildie relayed back to us, and the
+-- craft requests, whose id carries the requester's name.
+function GH.RenameOwner(from, to)
+    for _, g in pairs(GH.DB().guilds) do
+        local mine = g.members and g.members[from]
+        if mine then
+            local cur = g.members[to]
+            if not cur or (mine.rev or 0) > (cur.rev or 0) then
+                mine.owner = to
+                g.members[to] = mine
+            end
+            g.members[from] = nil
+        end
+        for _, side in ipairs({ "incoming", "outgoing" }) do
+            for oid, o in pairs(g[side] or {}) do
+                if o.requester == from or o.crafter == from then
+                    if o.requester == from then o.requester = to end
+                    if o.crafter == from then o.crafter = to end
+                    local newOid = o.requester .. "#" .. tostring(o.id)
+                    if newOid ~= oid then
+                        local cur = g[side][newOid]
+                        if not cur or (o.updated or 0) > (cur.updated or 0) then
+                            o.oid = newOid
+                            g[side][newOid] = o
+                        end
+                        g[side][oid] = nil
+                    end
+                end
+            end
+        end
+    end
+end
+
 function GH.GuildName()
     return IsInGuild() and GetGuildInfo("player") or nil
 end
@@ -544,6 +675,7 @@ GH.On("PLAYER_LOGIN", function()
     GuildhallCharDB.used = true
     GH.DB()
     GH.MergeGuildKeys()
+    GH.MergeCharNames()
     GH.MyData()
     -- Let LibForever compare our table with the other YippYapp addons': if none of them loaded, the
     -- client dropped them all. It says so once for the whole family, so we stay quiet then.
