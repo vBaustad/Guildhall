@@ -500,6 +500,11 @@ function GH.SelfTest(quiet)
     local others = GH.MyOtherNames and GH.MyOtherNames() or {}
     check("nothing of yours is left under another spelling of your name",
         #others == 0, table.concat(others, ", "))
+    -- The only check here that can catch our own name being wrong: the roster is the server's
+    -- spelling. Nothing to compare against yet (an empty roster) is not a failure.
+    local server = GH.ServerName and GH.ServerName()
+    check("the name we use is the one the server uses", server == nil,
+        server and ("the roster says " .. server) or "")
 
     -- The real index: nobody may appear twice for the same item.
     if dirty then I.Build() end

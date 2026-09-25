@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- `/gh names` now also reports what the guild roster calls you. If that differs from the name Guildhall
+  uses, it says so plainly: everything saved under ours moves across once the name is right. The
+  "everything is under one name" line says which name it means, instead of reading as "all is well".
 - Fixed a Lua error at login from the character-name merge below: it reached for the item helper
   through a name that doesn't exist in that file. If the helper isn't ready yet it now waits for the
   next login instead of failing.

@@ -549,6 +549,19 @@ end
 -- Anything of mine still filed under another spelling of my name: a leftover record, a profile a
 -- guildie relayed back under the old key, or a craft request whose id carries it. Empty is the
 -- answer we want after the library started building the key; /gh names prints it.
+-- What the SERVER calls this character, if it has told us: the guild roster is the server's own
+-- spelling, so an entry that is recognisably us but spelled differently means our own name is wrong -
+-- not the roster's. This is the only check here that can catch a mistake in GH.Me() itself; every
+-- other one compares against GH.Me() and so can only prove we are consistent, not correct.
+function GH.ServerName()
+    local me = GH.Me()
+    if not me or not (LIB and LIB.IsMyStoredName) then return nil end
+    for key in pairs(GH.roster) do
+        if key ~= me and LIB.IsMyStoredName(key) then return key end
+    end
+    return nil
+end
+
 function GH.MyOtherNames()
     local me, out, seen = GH.Me(), {}, {}
     if not me or not (LIB and LIB.IsMyStoredName) then return out end
@@ -860,12 +873,18 @@ SlashCmdList.GUILDHALL = function(input)
         GH.msg("roster says: %s", #roster > 0 and table.concat(roster, ", ") or "nothing yet")
         GH.msg("the addon channel says: %s", #peers > 0 and table.concat(peers, ", ") or "nobody yet")
         local others = GH.MyOtherNames()
+        local server = GH.ServerName()
         if not (LIB and LIB.IsMyStoredName) then
             GH.msg("older library: can't check whether anything is saved under another spelling.")
         elseif #others == 0 then
-            GH.msg("|cff60d060nothing of yours is saved under another spelling of your name.|r")
+            GH.msg("|cff60d060everything of yours is saved under one name|r - the one above, which is "
+                .. "the name we use. |cffffd100/yippyapp debug|r says whether that matches the server.")
         else
             GH.msg("|cffff6060still saved under another spelling:|r %s", table.concat(others, ", "))
+        end
+        if server then
+            GH.msg("|cffff6060the guild roster calls you %s|r - we are using the wrong name, and "
+                .. "everything saved under ours moves across once that is fixed.", server)
         end
     elseif cmd == "selftest" then
         if GH.SelfTest then GH.SelfTest() end
