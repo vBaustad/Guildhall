@@ -470,7 +470,10 @@ local function NewerOf(a, b)
     return b, a
 end
 
+-- Core.lua is the FIRST file the .toc loads, so nothing from another file exists while it loads:
+-- the codec has to be looked up when this runs, not captured at the top the way later files do.
 local function MergeCharRecord(short, full)
+    local C = GH.Codec
     local newer, older = NewerOf(short, full)
     local out = {}
     for k, v in pairs(older) do out[k] = v end
@@ -569,6 +572,12 @@ function GH.MyOtherNames()
 end
 
 function GH.MergeCharNames()
+    -- Fail closed: without the codec we can't compare posts by item, and a migration that throws at
+    -- login is worse than one that waits for the next one.
+    if not (GH.Codec and GH.Codec.ItemIdFromString) then
+        GH.dbg("codec not ready - character merge skipped this session")
+        return
+    end
     local db = GH.DB()
     wipe(GH.ambiguousNames)
     local me = GH.Me()

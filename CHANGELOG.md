@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fixed a Lua error at login from the character-name merge below: it reached for the item helper
+  through a name that doesn't exist in that file. If the helper isn't ready yet it now waits for the
+  next login instead of failing.
 - **One character, one record.** Everyone on WoW: Forever is "First Last", and Guildhall used to save
   you under your first name alone while your guild knew you by both - so the same character ended up
   with two sets of professions, posts and craft requests, and each session wrote to whichever one it
