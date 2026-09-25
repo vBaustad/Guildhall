@@ -497,6 +497,9 @@ function GH.SelfTest(quiet)
     -- to touch are named here rather than merged behind your back.
     check("your own characters are each stored once",
         #(GH.ambiguousNames or {}) == 0, table.concat(GH.ambiguousNames or {}, ", "))
+    local others = GH.MyOtherNames and GH.MyOtherNames() or {}
+    check("nothing of yours is left under another spelling of your name",
+        #others == 0, table.concat(others, ", "))
 
     -- The real index: nobody may appear twice for the same item.
     if dirty then I.Build() end

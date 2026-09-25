@@ -9,6 +9,8 @@
   post or request is thrown away, and your craft requests keep working under your full name. If two
   characters share a first name, Guildhall leaves both alone and says so in `/gh selftest` rather than
   guessing which is which.
+  `/gh names` answers the question directly afterwards: it says whether anything of yours is still
+  saved under another spelling of your name, and `/gh selftest` fails if it is.
 - **Your first login doesn't look like a disaster any more.** An empty Guildhall used to mean "something
   was lost", which on a fixed client is simply a new player: no warning is shown, nothing is asked of
   your guild, and your profile is published normally from the start. The warning is still there for the

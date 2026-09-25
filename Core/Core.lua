@@ -543,6 +543,31 @@ local function SharedFirstName(db, key, me)
     return nil
 end
 
+-- Anything of mine still filed under another spelling of my name: a leftover record, a profile a
+-- guildie relayed back under the old key, or a craft request whose id carries it. Empty is the
+-- answer we want after the library started building the key; /gh names prints it.
+function GH.MyOtherNames()
+    local me, out, seen = GH.Me(), {}, {}
+    if not me or not (LIB and LIB.IsMyStoredName) then return out end
+    local function note(where, key)
+        if key and key ~= me and not seen[where .. key] and LIB.IsMyStoredName(key) then
+            seen[where .. key] = true
+            out[#out + 1] = where .. " " .. key
+        end
+    end
+    for key in pairs(GH.DB().chars) do note("saved character", key) end
+    for _, g in pairs(GH.DB().guilds) do
+        for key in pairs(g.members or {}) do note("stored profile", key) end
+        for _, side in ipairs({ "incoming", "outgoing" }) do
+            for _, o in pairs(g[side] or {}) do
+                note("craft request from", o.requester)
+                note("craft request to", o.crafter)
+            end
+        end
+    end
+    return out
+end
+
 function GH.MergeCharNames()
     local db = GH.DB()
     wipe(GH.ambiguousNames)
@@ -825,6 +850,14 @@ SlashCmdList.GUILDHALL = function(input)
         end
         GH.msg("roster says: %s", #roster > 0 and table.concat(roster, ", ") or "nothing yet")
         GH.msg("the addon channel says: %s", #peers > 0 and table.concat(peers, ", ") or "nobody yet")
+        local others = GH.MyOtherNames()
+        if not (LIB and LIB.IsMyStoredName) then
+            GH.msg("older library: can't check whether anything is saved under another spelling.")
+        elseif #others == 0 then
+            GH.msg("|cff60d060nothing of yours is saved under another spelling of your name.|r")
+        else
+            GH.msg("|cffff6060still saved under another spelling:|r %s", table.concat(others, ", "))
+        end
     elseif cmd == "selftest" then
         if GH.SelfTest then GH.SelfTest() end
     elseif cmd == "debug" then
