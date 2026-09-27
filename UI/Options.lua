@@ -135,9 +135,12 @@ local function Build(f, extraButton)
         f.lists = f.lists or {}
         f.lists[#f.lists + 1] = function()
             local list = entries()
+            -- Four, not six: a Forever name is two words, and a summary line that runs off the
+            -- end is cut without an ellipsis budget - you get half a name and no hint there are
+            -- more. "and 5 more" says the same thing and always fits. The button has the full list.
             local names = {}
             for i, e in ipairs(list) do
-                if i > 6 then names[#names + 1] = ("and %d more"):format(#list - 6) break end
+                if i > 4 then names[#names + 1] = ("and %d more"):format(#list - 4) break end
                 names[#names + 1] = e.label
             end
             text:SetText(#list == 0 and "|cff8a8a8anone|r" or table.concat(names, ", "))

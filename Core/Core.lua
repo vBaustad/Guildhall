@@ -148,6 +148,15 @@ function GH.Short(full)
     return short
 end
 
+-- The same name with the realm dropped but the surname ALWAYS kept. GH.Short follows the player's
+-- own surname setting and the width of the slot it lands in, so it can come out as "Duplo" or cut
+-- off as "Duplo Bon...". That is fine in passing and useless when you are choosing which of two
+-- guildies to whisper, so every shortened name has this behind it in a tooltip.
+function GH.LongName(full)
+    if not full then return "?" end
+    return full:match("^(.-)%-[^%-]+$") or full
+end
+
 -- Whispers and addon whispers must use the plain name for someone on our own realm: the server
 -- doesn't know "Name-OurRealm". Names from other realms keep their suffix. Storage and comparisons
 -- always use the full "Name-Realm" form.

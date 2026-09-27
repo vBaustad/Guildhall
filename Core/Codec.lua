@@ -140,10 +140,27 @@ function C.KeyIcon(key)
     return (sid and API.SpellTexture(sid)) or "Interface\\Icons\\Spell_Holy_GreaterHeal"
 end
 
+-- The item's quality, or nil when we cannot say. Two things are unknown, not Common: an item this
+-- character has never held (GetItemInfo is asynchronous and answers nothing until the server
+-- replies), and a spell key - an enchant makes no item, so it has no item quality at all.
+-- Answering 1 for either of those makes a caller decide AGAINST the item on no evidence, which is
+-- how the rarity filter emptied a profession page. Callers must keep what they cannot judge;
+-- C.KeyAtLeastQuality below is the one that knows how.
 function C.KeyQuality(key)
-    if type(key) ~= "number" then return 1 end
-    local q = select(3, API.GetItemInfo(key))
-    return q or 1
+    if type(key) ~= "number" then return nil end
+    return (select(3, API.GetItemInfo(key)))
+end
+
+-- Does this key pass a "minimum quality" filter? Anything whose quality we cannot read passes:
+-- an item still loading is asked for and drops into place when the answer arrives, and an enchant
+-- is never hidden by a filter that has nothing to compare it with. A filter that hides what it
+-- cannot judge looks broken, and is indistinguishable from an empty guild.
+function C.KeyAtLeastQuality(key, min)
+    if not min or min <= 0 then return true end
+    local q = C.KeyQuality(key)
+    if q then return q >= min end
+    if type(key) == "number" and API.RequestItem then API.RequestItem(key) end
+    return true
 end
 
 -- ---------------------------------------------------------------------------
@@ -191,7 +208,7 @@ end
 
 function C.KeyColor(key)
     local q = C.KeyQuality(key)
-    local c = ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[q]
+    local c = q and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[q]
     if c and c.hex then return c.hex end
     return "|cffffffff"
 end

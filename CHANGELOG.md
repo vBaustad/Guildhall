@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- **The rarity filter no longer empties a profession page.** Picking Uncommon+, Rare+ or Epic used to
+  hide everything Guildhall could not put a quality on - and an enchant has no item quality at all, so
+  the Enchanting page went blank, as did any list shown before the item details had arrived from the
+  server. A quality Guildhall does not know is now treated as "not yet", never as "Common": the row
+  stays, the item is asked for, and the list settles on the real answer when it arrives. Enchants
+  always show, whatever the filter is set to.
+- **Names fit their slots now that everyone has two of them.** In the people list beside an item, the
+  name has its own column: a long "Firstname Surname" is cut with an ellipsis instead of pushing the
+  skill level out under the buttons, and the skill lines up down the list. Hovering a row shows the
+  name in full, surname included, whether or not you have surnames switched on. The blocked and
+  don't-share summaries in Settings list four entries before "and N more", so the line ends with a
+  count rather than half a name.
+
 - **Item tooltips no longer say who can craft something unless you ask them to.** That line is off by
   default now - a tooltip turns up over everything, whether or not you wanted it. Turn it on under
   Settings, where it sits next to the line about who has one to spare and who wants one, which is

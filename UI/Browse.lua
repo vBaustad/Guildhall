@@ -6,6 +6,9 @@ local state = { query = "", source = "all", prof = nil, online = false, selected
 local view      -- the tab frame
 local LIST_ROWS, LIST_ROW_H = 15, 22
 local DETAIL_ROW_H = 36
+-- The name column in a detail row. The row is about 410 wide: two 62pt buttons and the skill or
+-- quantity beside the name need the rest, which leaves this much for the name itself.
+local NAME_COL_W = 170
 local FILTER_LABELS = { all = "Everything", crafts = "Crafts", listings = "Guildies have", wants = "Wanted" }
 local CARD_W, CARD_H, GRID_GAP, CHIP_W = 340, 64, 10, 120
 -- Cooking, First Aid and Fishing sit apart from the crafting professions.
@@ -108,6 +111,11 @@ local function MakeDetailRow(parent)
     r.bg:SetColorTexture(1, 1, 1, 0.03)
     r.name = U.Text(r, "GameFontHighlight")
     r.name:SetPoint("TOPLEFT", 6, -4)
+    -- A fixed column, because a Forever name is two words: "Duplo Bonk" and "Bartholomew
+    -- Winterbottom" have to start the skill and the quantity in the same place, and a name too long
+    -- for the column is cut with an ellipsis instead of pushing them under the buttons. The row's
+    -- tooltip carries the whole name, so nothing is lost by the cut.
+    r.name:SetWidth(NAME_COL_W)
     r.meta = U.Text(r, "GameFontHighlightSmall")
     r.meta:SetPoint("LEFT", r.name, "RIGHT", 8, 0)
     r.note = U.Text(r, "GameFontDisableSmall")
@@ -245,7 +253,7 @@ local function RenderDetail()
             local note = isMe and "" or (GH.IsOnline(c.owner) and "|cff60d060online|r" or "offline - requests wait until they log in")
             if c.stale then note = note .. " |cff8a8a8a(from your last session)|r" end
             r.note:SetText(note)
-            r.tip = { GH.Short(c.owner), ("%s, skill %d"):format(c.prof, c.rank or 0) }
+            r.tip = { GH.LongName(c.owner), ("%s, skill %d"):format(c.prof, c.rank or 0) }
             r.b1:SetShown(not isMe)
             r.b2:SetShown(not isMe)
             r.b2:SetText("Request")
@@ -265,7 +273,7 @@ local function RenderDetail()
                 l.stale and "last confirmed " or "", GH.Ago(l.l.posted)))
             r.note:SetText(l.stale and "|cff8a8a8aold - ask before counting on it|r"
                 or (l.l.note ~= "" and l.l.note or "|cff6a6a6ano note|r"))
-            r.tip = { GH.Short(l.owner), l.l.note ~= "" and l.l.note or nil }
+            r.tip = { GH.LongName(l.owner), l.l.note ~= "" and l.l.note or nil }
             r.b1:SetShown(not isMe)
             r.b1:SetEnabled(GH.IsOnline(l.owner))
             r.b2:Hide()
@@ -284,7 +292,7 @@ local function RenderDetail()
                 (want.price or 0) > 0 and ("|cffffd100" .. GH.Money(want.price) .. " each|r  ") or "",
                 GH.Ago(want.posted)))
             r.note:SetText(want.note ~= "" and want.note or "|cff6a6a6ano note|r")
-            r.tip = { GH.Short(w.owner), GH.Listings.WantText(want, I.Name(key)),
+            r.tip = { GH.LongName(w.owner), GH.Listings.WantText(want, I.Name(key)),
                 want.note ~= "" and want.note or nil }
             r.b1:SetShown(not isMe)
             r.b1:SetEnabled(GH.IsOnline(w.owner))
@@ -448,12 +456,13 @@ local function Refresh()
     end
 
     local results = state.source == "all" and all or I.Search(state.query, state)
-    -- Minimum quality: Poor keeps everything, Epic keeps only epics.
+    -- Minimum quality: Poor keeps everything, Epic keeps only epics. A row whose quality we cannot
+    -- read - an item still loading, an enchant that makes no item - is kept, never dropped.
     local minQuality = Prefs().minQuality or 0
     if minQuality > 0 then
         local kept = {}
         for _, r in ipairs(results) do
-            if C.KeyQuality(r.key) >= minQuality then kept[#kept + 1] = r end
+            if C.KeyAtLeastQuality(r.key, minQuality) then kept[#kept + 1] = r end
         end
         results = kept
     end
@@ -589,9 +598,12 @@ local function Build(f)
     -- Minimum quality for the item list.
     f.quality = U.Segmented(f, {
         { value = 0, label = "All", tip = "Show items of every quality." },
-        { value = 2, label = "|cff1eff00Uncommon+|r", tip = "Hide poor and common items." },
-        { value = 3, label = "|cff0070ddRare+|r", tip = "Show only rare and epic items." },
-        { value = 4, label = "|cffa335eeEpic|r", tip = "Show only epic items." },
+        { value = 2, label = "|cff1eff00Uncommon+|r",
+            tip = "Hide poor and common items. Enchants make no item, so they always show." },
+        { value = 3, label = "|cff0070ddRare+|r",
+            tip = "Show only rare and epic items, and enchants, which have no item quality." },
+        { value = 4, label = "|cffa335eeEpic|r",
+            tip = "Show only epic items, and enchants, which have no item quality." },
     }, 260, function(v)
         Prefs().minQuality = v
         Refresh()
