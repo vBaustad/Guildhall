@@ -1,6 +1,6 @@
 # Guildhall
 
-## Unreleased
+## 0.2.0-beta7
 
 - **The rarity filter no longer empties a profession page.** Picking Uncommon+, Rare+ or Epic used to
   drop every row Guildhall couldn't put an item quality on - and an enchant makes no item, so it has
