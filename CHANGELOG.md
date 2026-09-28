@@ -3,23 +3,22 @@
 ## Unreleased
 
 - **The rarity filter no longer empties a profession page.** Picking Uncommon+, Rare+ or Epic used to
-  hide everything Guildhall could not put a quality on - and an enchant has no item quality at all, so
-  the Enchanting page went blank, as did any list shown before the item details had arrived from the
-  server. A quality Guildhall does not know is now treated as "not yet", never as "Common": the row
-  stays, the item is asked for, and the list settles on the real answer when it arrives. Enchants
-  always show, whatever the filter is set to.
-- **Names fit their slots now that everyone has two of them.** In the people list beside an item, the
-  name has its own column: a long "Firstname Surname" is cut with an ellipsis instead of pushing the
-  skill level out under the buttons, and the skill lines up down the list. Hovering a row shows the
-  name in full, surname included, whether or not you have surnames switched on. The blocked and
-  don't-share summaries in Settings list four entries before "and N more", so the line ends with a
-  count rather than half a name.
-
+  drop every row Guildhall couldn't put an item quality on - and an enchant makes no item, so it has
+  none. The Enchanting page went completely blank. The same took out any craft whose recipe isn't in
+  the bundled data, on any profession page. A quality Guildhall can't read is now "not yet", never
+  "Common": the row stays, and the list settles on the real answer once the game has one. Enchants
+  show whatever the filter is set to, since there is nothing to compare them with.
+- **Names fit their slots now that everyone has two of them.** In the people list beside an item the
+  name has a column of its own, so a long "Firstname Surname" is cut short instead of pushing the
+  skill level out under the buttons, and the skill lines up down the list. Hover a row and the
+  tooltip gives the name in full, surname included, whether or not you have surnames switched on.
+  The blocked and don't-share summaries in Settings list four entries and then a count, rather than
+  six that ran off the end mid-name.
 - **Item tooltips no longer say who can craft something unless you ask them to.** That line is off by
   default now - a tooltip turns up over everything, whether or not you wanted it. Turn it on under
   Settings, where it sits next to the line about who has one to spare and who wants one, which is
   unchanged. If you had already turned tooltips on, that choice is kept; only the crafter line is new
-  and off.
+  and off. Browse and search show crafters either way - this is only about the tooltip.
 - `/gh names` now also reports what the guild roster calls you. If that differs from the name Guildhall
   uses, it says so plainly: everything saved under ours moves across once the name is right. The
   "everything is under one name" line says which name it means, instead of reading as "all is well".
@@ -54,9 +53,10 @@
   always the full name, so hiding surnames can never split a guildie into two.
 - `/gh selftest` checks that nobody is stored under both a short and a full name, and the new
   `/gh names` shows what the game, the guild roster and the addon channel each call people.
-- **A guild is one guild again, whatever realm you're on.** Guildhall built the key it stores your guild's
-  data under from the realm name in two different spellings ("Bleeding Hollow" and "BleedingHollow"),
-  so the same guild could end up saved twice and two members wouldn't recognise each other's data.
+- **A guild is one guild, under one key.** Guildhall built the key it stores your guild's data under
+  from the realm name, and spelled that name two different ways depending on which way in it took
+  ("Bleeding Hollow" one way, "BleedingHollow" the other), so the same guild could end up saved twice
+  and two members wouldn't recognise each other's data.
   Anything saved under the old spelling is merged into one store at login - nothing is replaced, and
   whichever copy knows more about a guildie or a request is the one kept.
 
