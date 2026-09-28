@@ -3,6 +3,13 @@
 local ADDON, GH = ...
 _G.Guildhall = GH
 
+-- The library, fetched here and nowhere else. It MUST stay above every function that reads it: a
+-- Lua local is invisible to code written above it, so such a function quietly reads the global of
+-- the same name - nil - and takes its fallback for ever, with no error and nothing for luacheck to
+-- catch. GH.Me did exactly that, so Guildhall stored the player under "Duplo" while the library it
+-- believed it was asking answered "Duplo Bonk". The .toc loads Libs before this file, so it is here.
+local LIB = LibStub and LibStub("LibForever-1.0", true)
+
 GH.VERSION = C_AddOns.GetAddOnMetadata(ADDON, "Version") or "0.0.0"
 
 GH.CREAM = "ffebdec2"
@@ -161,7 +168,6 @@ end
 -- doesn't know "Name-OurRealm". Names from other realms keep their suffix. Storage and comparisons
 -- always use the full "Name-Realm" form.
 -- LibForever does the same, and its realm match ignores case, spaces, hyphens and apostrophes.
-local LIB = LibStub and LibStub("LibForever-1.0", true)
 local function plainRealm(s) return (s or ""):gsub("[%s%-']", ""):lower() end
 function GH.WhisperName(full)
     if not full then return nil end

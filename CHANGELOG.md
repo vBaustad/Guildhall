@@ -25,13 +25,17 @@
 - Fixed a Lua error at login from the character-name merge below: it reached for the item helper
   through a name that doesn't exist in that file. If the helper isn't ready yet it now waits for the
   next login instead of failing.
-- **One character, one record.** Everyone on WoW: Forever is "First Last", and Guildhall used to save
-  you under your first name alone while your guild knew you by both - so the same character ended up
-  with two sets of professions, posts and craft requests, and each session wrote to whichever one it
-  happened to produce. The two are merged at login: the highest skill and the newest revision win, no
-  post or request is thrown away, and your craft requests keep working under your full name. If two
-  characters share a first name, Guildhall leaves both alone and says so in `/gh selftest` rather than
-  guessing which is which.
+- **One character, one record.** Everyone on WoW: Forever is "First Last", and Guildhall saved you
+  under your first name alone while your guild knew you by both - so the same character ended up with
+  two sets of professions, posts and craft requests, and each session wrote to whichever one it
+  happened to produce. Two separate things were wrong. Guildhall asks the shared library for your
+  name, but the line that fetches that library sat lower in the file than the function using it, so
+  the function never saw it and fell back to working the name out itself - which on Forever gives the
+  first name and drops the surname. Silently, every session. Your name now comes from the same place
+  your guildies' names come from. The records are then merged at login: the highest skill and the
+  newest revision win, no post or request is thrown away, and your craft requests keep working under
+  your full name. If two characters share a first name, Guildhall leaves both alone and says so in
+  `/gh selftest` rather than guessing which is which.
   `/gh names` answers the question directly afterwards: it says whether anything of yours is still
   saved under another spelling of your name, and `/gh selftest` fails if it is.
 - **Your first login doesn't look like a disaster any more.** An empty Guildhall used to mean "something
