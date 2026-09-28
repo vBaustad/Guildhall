@@ -53,8 +53,10 @@
   Guildhall opened whispers by typing "/w Name Surname ..." into the chat box - so the surname was read
   as the start of the message and the whisper went to the first name. It now hands the name to the chat
   box as a target, the way the game's own UI does.
-- Guildhall follows your "show surnames" setting when it shows a name. What it stores and compares is
-  always the full name, so hiding surnames can never split a guildie into two.
+- Guildhall follows your "show surnames" setting when it shows a name. It is a display choice only -
+  it changes nothing about what Guildhall stores or compares, so hiding surnames can never split a
+  guildie into two. A guildie running an older build can still announce themselves under a short
+  name; `/gh selftest` says so if anyone has ended up stored both ways.
 - `/gh selftest` checks that nobody is stored under both a short and a full name, and the new
   `/gh names` shows what the game, the guild roster and the addon channel each call people.
 - **A guild is one guild, under one key.** Guildhall built the key it stores your guild's data under
