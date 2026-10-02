@@ -1,5 +1,20 @@
 # Guildhall
 
+## Unreleased
+
+- **One way in: the settings window.** The YippYapp welcome window is gone, and so is Guildhall's
+  page in it. Everything that page explained now sits at the bottom of Guildhall's own settings,
+  under headings, where somebody looking for help actually goes - scroll past the switches. The one
+  thing that does not move is the line about opening a profession window once, because that is only
+  true of some professions some of the time: My Guildhall says it against the profession it applies
+  to, which is where it was always more use.
+- **The launcher bar is gone**, along with the YippYapp settings page that configured it. The
+  minimap row stays and is now always grouped - one YippYapp button holding one icon per addon.
+  Whether Guildhall is one of them is a switch on Guildhall's own settings page now, under
+  "Minimap". Turning it off still leaves `/gh` and the addons button.
+- The "Psst - you have all 6 YippYapp addons" line at the bottom of the settings page is gone.
+  Nothing replaces it; the page ends with the help text instead.
+
 ## 0.2.0-beta7
 
 - **The rarity filter no longer empties a profession page.** Picking Uncommon+, Rare+ or Epic used to

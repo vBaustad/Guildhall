@@ -76,18 +76,4 @@ function Guildhall_OnAddonCompartmentLeave()
     GameTooltip:Hide()
 end
 
--- The shared launcher notch (LibForever): one bar on the screen edge for all our addons.
-local function RegisterNotch()
-    if not LIB or not LIB.RegisterLauncher then return end
-    LIB.RegisterLauncher({
-        id = "Guildhall", label = "Guildhall", order = 10,
-        icon = "Interface\\AddOns\\Guildhall\\Media\\notch",
-        onClick = function(button) Guildhall_OnAddonCompartmentClick(nil, button) end,
-        -- The launcher never shows notifications; new craft requests are counted on the Requests tab
-        -- and in the minimap button's tooltip.
-        tooltip = { "Left-click: open", "Right-click: settings" },
-    }, GH.DB())
-end
-
 GH.Listen("LOGIN", Build)
-GH.Listen("LOGIN", RegisterNotch)

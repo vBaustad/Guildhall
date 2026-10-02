@@ -1,11 +1,35 @@
 -- Guildhall - settings. The same page is built twice: as the Settings tab in Guildhall's own
--- window, and in Blizzard's Options -> AddOns -> Guildhall. Minimap and launcher buttons are not
--- here: they live on the shared YippYapp page (LibForever), linked at the bottom.
+-- window, and in Blizzard's Options -> AddOns -> Guildhall. Every choice Guildhall has is here now,
+-- including whether it shows in the minimap row: the shared YippYapp settings page that used to
+-- hold that one is gone, and so is the welcome window, so this page also carries the help text.
 local ADDON, GH = ...
 local U = GH.UI
 local LIB = LibStub and LibStub("LibForever-1.0", true)
 
 local SECTION_GAP = 8   -- extra air above each heading
+
+-- What used to be Guildhall's page in the welcome window. It sits at the bottom of this page now.
+-- The library owns the layout, so these are only the words; it re-wraps them to whatever width the
+-- page gets. Nothing here states a condition that can change - "open your Blacksmithing window
+-- once" belongs next to the profession it is true of, which is where My Guildhall says it.
+local HELP = {
+    { "What it does",
+      "Guildhall shows who in your guild can craft what, who has a spare of something, and who is "
+      .. "after one - so you can ask the right person instead of asking the channel." },
+    { "Your recipes are shared on their own",
+      "When you log in, Guildhall shares your professions and recipes with your guild, and every "
+      .. "guildie running it does the same. There is nothing to fill in, and only your guild sees "
+      .. "it. A profession whose recipes only its own window can list needs that window opened "
+      .. "once - My Guildhall says which of yours, if any." },
+    { "Getting started",
+      "Open it with |cffffd100/gh|r, the Guildhall icon in the minimap row, or the addons button by "
+      .. "the minimap. Search for anything the guild can craft, has or wants, or browse by "
+      .. "profession." },
+    { "Asking for a craft",
+      "Send a craft request to anyone who can make it, even someone offline: it is delivered when "
+      .. "they next log in. Offer spares under \"Guildies have it\" and post what you are after "
+      .. "under \"Wanted\" - guildies who can make it are told." },
+}
 
 local function Build(f, extraButton)
     local checks = {}
@@ -36,8 +60,10 @@ local function Build(f, extraButton)
         place(U.Heading(f, text), SECTION_GAP + 6, 8)
     end
 
-    -- Checkbox with its explanation in the tooltip.
-    local function checkbox(label, tip, key)
+    -- Checkbox with its explanation in the tooltip. Reading and writing through functions rather
+    -- than a settings key, because not every choice on this page is ours to store: the minimap one
+    -- belongs to LibDBIcon, and a copy of it here is a copy that can disagree with the button.
+    local function checkboxFor(label, tip, get, set)
         local cb = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
         cb:SetSize(26, 26)
         local follows = last.isCheck
@@ -46,8 +72,8 @@ local function Build(f, extraButton)
         local l = f:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
         l:SetPoint("LEFT", cb, "RIGHT", 4, 0)
         l:SetText(label)
-        cb.get = function() return GH.Settings()[key] end
-        cb:SetScript("OnClick", function(self) GH.Settings()[key] = self:GetChecked() and true or false end)
+        cb.get = get
+        cb:SetScript("OnClick", function(self) set(self:GetChecked() and true or false) end)
         cb:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
             GameTooltip:AddLine(label, 1, 0.82, 0.3)
@@ -56,6 +82,12 @@ local function Build(f, extraButton)
         end)
         cb:SetScript("OnLeave", function() GameTooltip:Hide() end)
         checks[#checks + 1] = cb
+    end
+
+    local function checkbox(label, tip, key)
+        checkboxFor(label, tip,
+            function() return GH.Settings()[key] end,
+            function(on) GH.Settings()[key] = on end)
     end
 
     -- Most-used first: what you see on items, then what pings you, then your own listings.
@@ -164,22 +196,29 @@ local function Build(f, extraButton)
             return out
         end, "Share again", function(id) GH.SetNoShare(id, false) end)
 
-    -- Bottom: a way into Guildhall and the family footer. The minimap and launcher choices live in the
-    -- YippYapp window's own settings view, so they aren't repeated here.
-    -- No "Welcome / what's new" button here: this page lives in the YippYapp window, which has one.
+    -- Least-used last, as above. The library owns this one: it is LibDBIcon's state, read with
+    -- IsMinimapButtonShown and written with SetMinimapButtonShown, and never cached here. A nil
+    -- means nobody has chosen, which is shown - so the test is "not false", not "is true".
+    if LIB and LIB.IsMinimapButtonShown and LIB.SetMinimapButtonShown then
+        heading("Minimap")
+        checkboxFor("Show Guildhall in the minimap row",
+            "The YippYapp button by the minimap holds one icon for each of these addons you have. "
+            .. "Turn this off to keep Guildhall out of it - /gh and the addons button still open it.",
+            function() return LIB.IsMinimapButtonShown("Guildhall") ~= false end,
+            function(on) LIB.SetMinimapButtonShown("Guildhall", on) end)
+    end
+
+    -- Bottom: a way into Guildhall, and then the help text, which Refresh places because its
+    -- position depends on where the controls above actually finished.
     local buttons = {}
     if extraButton then buttons[#buttons + 1] = extraButton(f) end
     for i, b in ipairs(buttons) do
         if i == 1 then place(b, SECTION_GAP + 14, 8) else b:SetPoint("LEFT", buttons[i - 1], "RIGHT", 8, 0) end
     end
-    if LIB and LIB.WelcomePsstText then
-        local psst = f:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-        place(psst, 14, 10)
-        psst:SetPoint("RIGHT", f, "RIGHT", -8, 0)
-        psst:SetJustifyH("LEFT")
-        psst:SetSpacing(2)
-        f.psst = psst
-    end
+    -- The "you have all six YippYapp addons" footer is gone: the user called it weird, and it was
+    -- the one thing on this page that was not about Guildhall. Nothing takes its place - the page
+    -- ends with the help text now, which is a better last thing to read.
+    f.lastRow = last
 end
 
 local function Refresh(f)
@@ -187,8 +226,21 @@ local function Refresh(f)
     local days = GH.Settings().listingDays or 14
     f.slider:SetValue(days)
     f.sliderLabel(days)
-    if f.psst then f.psst:SetText(LIB.WelcomePsstText("Guildhall")) end
     for _, update in ipairs(f.lists or {}) do update() end
+    -- The help goes below whatever the controls ended up being, and this page is built from
+    -- relative anchors, so there is no running y to hand it - only the gap between the page's top
+    -- and the last thing on it, which exists once the page has been laid out. Before that GetTop()
+    -- is nil and we skip; AddHelp replaces rather than stacks, so the first real call is the one
+    -- that counts and every later one is free.
+    -- Only where the page can grow to hold it. On the fallback Settings tab nothing scrolls, and
+    -- help you cannot scroll to is worse than no help at all.
+    if not (LIB and LIB.AddHelp and f.lastRow and f.GrowTo) then return end
+    local top, bottom = f:GetTop(), f.lastRow:GetBottom()
+    if not (top and bottom) then return end
+    LIB.AddHelp(f, HELP, -(top - bottom) - 28)
+    -- A page taller than the window scrolls, and only the frame the library was given knows how far
+    -- it has to scroll. Without this the help exists and cannot be reached.
+    if f.GrowTo then f.GrowTo(-LIB.HelpBottom(f) + 28) end
 end
 
 -- Settings live in one place: the YippYapp window. Only if that page can't be hosted does Guildhall
@@ -233,6 +285,9 @@ local function RegisterBlizzardPanel()
     page:SetPoint("TOPLEFT", 10, -10)
     page:SetPoint("BOTTOMRIGHT", -10, 10)
     Build(page, OpenGuildhallButton)
+    -- page is inset inside panel, and panel is what the library scrolls, so the page asks for the
+    -- height it needs and the panel is the one that grows.
+    page.GrowTo = function(height) panel:SetHeight(math.max(PAGE_HEIGHT, height + 20)) end
     -- The canvas can already count as shown when Settings adopts it, so its own OnShow may never fire:
     -- fill the values now, on Settings' own refresh, and whenever the inner page is shown.
     local function refresh() Refresh(page) end

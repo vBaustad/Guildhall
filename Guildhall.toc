@@ -21,7 +21,6 @@ Libs\LibDBIcon-1.0\lib.xml
 Libs\AceComm-3.0\ChatThrottleLib.lua
 Libs\AceComm-3.0\AceComm-3.0.lua
 Libs\LibForever-1.0\LibForever-1.0.lua
-Libs\LibForever-1.0\Launcher.lua
 Libs\LibForever-1.0\Windows.lua
 Libs\LibForever-1.0\Minimap.lua
 Libs\LibForever-1.0\Welcome.lua
@@ -44,4 +43,3 @@ UI\Mine.lua
 UI\Requests.lua
 UI\Minimap.lua
 UI\Options.lua
-UI\Welcome.lua
