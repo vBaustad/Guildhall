@@ -730,7 +730,16 @@ function GH.MergeGuildieNames()
                     renames[#renames + 1] = { key, matches[1] }
                 elseif #matches > 1 then
                     table.sort(matches)
-                    GH.splitGuildies[#GH.splitGuildies + 1] = key .. " -> " .. table.concat(matches, " / ")
+                    -- What the record remembers about where it came from, as a clue for whoever
+                    -- reads this - never as a tie-breaker. "via" is whoever SENT the profile, and
+                    -- on a relayed one that is a third party, who in exactly this case can be the
+                    -- other guildie sharing the first name: if Duplo Lasse passes on Duplo Bonk's
+                    -- old-style profile, via says Lasse about Bonk's data. Believing it there would
+                    -- merge two different players, which is the one mistake this must never make.
+                    local rec = g.members[key]
+                    local via = rec and rec.via and (" - arrived via " .. rec.via) or ""
+                    GH.splitGuildies[#GH.splitGuildies + 1] =
+                        key .. " -> " .. table.concat(matches, " / ") .. via
                 end
             end
         end
