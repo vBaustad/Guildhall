@@ -709,16 +709,23 @@ function GH.GuildDB()
     return g
 end
 
--- The roster says who is online, but it can be empty for a whole session (we never request it). A guildie
--- who has sent us an addon message in the last hour counts as online too, so requests and status
--- updates still get delivered.
-local PEER_FRESH = 3600
+-- Who is online. We never ASK Forever for a roster - asking pops the "blocked from an action" dialog -
+-- so what we hold is whatever the server last pushed, and it can be empty for a whole session or
+-- simply old. Neither of those may be allowed to contradict a guildie who is talking to us right now.
+local PEER_FRESH = 3600   -- no roster row at all: an addon message this recent still counts as online
+local PEER_LIVE = 300     -- a message THIS recent outranks the roster, however old the roster is
 function GH.IsOnline(full)
     if full == GH.Me() then return true end
+    local peer = GH.Sync and GH.Sync.peers[full]
+    local since = peer and (GH.Now() - (peer.seen or 0)) or nil
+    -- A message on the guild addon channel is proof, and the roster is a snapshot. A snapshot that
+    -- says "offline" about somebody whose message arrived seconds ago is simply out of date, and
+    -- believing it is how a guild that is syncing fine reads as "you are the only one here".
+    -- Bounded on purpose: somebody who logs off is wrong about for a few minutes, not for ever.
+    if since and since < PEER_LIVE then return true end
     local r = GH.roster[full]
     if r then return r.online and true or false end
-    local peer = GH.Sync and GH.Sync.peers[full]
-    return peer ~= nil and (GH.Now() - (peer.seen or 0)) < PEER_FRESH
+    return since ~= nil and since < PEER_FRESH
 end
 
 -- The roster can be empty for a long time (we never request it), so anyone who talked to us on the

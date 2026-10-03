@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **A guildie who is talking to you is online, whatever the roster thinks.** Forever never lets an
+  addon ask for a fresh guild roster - asking pops the "blocked from an action" dialog - so the copy
+  Guildhall holds is whatever the server last pushed, and it can be an hour old. It was allowed to
+  overrule a guildie whose message had just arrived. That is the sync that finds your guild, says
+  "2 online with Guildhall", and then drops back to "you're the only one here" a moment later: the
+  guildies answered first and the stale roster arrived second. A message on the guild channel in the
+  last few minutes now counts as proof of who is here; after that the roster decides again, so
+  somebody who logs out is wrong about for a few minutes rather than for the rest of your session.
+
 - **One way in: the settings window.** The YippYapp welcome window is gone, and so is Guildhall's
   page in it. Everything that page explained now sits at the bottom of Guildhall's own settings,
   under headings, where somebody looking for help actually goes - scroll past the switches. The one
