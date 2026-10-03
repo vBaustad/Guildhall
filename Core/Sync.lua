@@ -256,11 +256,46 @@ local function MergePosts(held, sent, takedowns, cap)
     return out
 end
 
+-- Is this profile the SENDER describing themselves under an older build's spelling of their name?
+-- A Guildhall before 0.2.0-beta7 worked its own name out from UnitName's first value, which on
+-- Forever is the first name with the surname dropped - so it announces "Morgan" while the server
+-- stamps the message "Morgan Smith". One person, two spellings. The roster only knows the server's,
+-- so such a profile was discarded and that guildie simply vanished from everyone else's guild.
+--
+-- Three conditions, all of them needed:
+--   the owner carries no surname - and EVERY Forever character has one, so a bare first name is
+--     never a real character, only an older build naming itself;
+--   the realms match;
+--   the owner is exactly the sender's first name. That is what excludes a relay: somebody passing
+--     on a third party's old-style profile has a different first name, and is left alone.
+-- A different surname is a different player and is never touched: "Duplo Bonk" and "Duplo Lasse"
+-- stay two people, which is the whole reason this is not simply "same first name wins".
+local function OldSpellingOf(owner, sender)
+    if type(owner) ~= "string" or type(sender) ~= "string" then return false end
+    if owner == sender then return false end           -- already the server's spelling: nothing to correct
+    local oName, oRealm = owner:match("^(.*)%-([^%-]+)$")
+    local sName, sRealm = sender:match("^(.*)%-([^%-]+)$")
+    if not (oName and sName) then return false end
+    if GH.NormalizeRealm(oRealm) ~= GH.NormalizeRealm(sRealm) then return false end
+    -- One comparison carries all of it. The owner must be EXACTLY the sender's first name, which
+    -- rejects a different surname ("Duplo Lasse" is not "Duplo"), rejects a relay (a third party's
+    -- first name is not the sender's), and can only ever be true for a bare first name - which no
+    -- real Forever character has, since every one of them is "First Last". An explicit "the owner
+    -- carries no surname" test alongside this one reads like a second rule and is not: removing it
+    -- failed nothing, so it is gone rather than left to rot as a guard nobody can break.
+    return oName == (sName:match("^%S+") or sName)
+end
+
 local function StoreProfile(p, sender, fresh, takedowns)
     local g = GH.GuildDB()
     if not g or not p.owner then return end
     -- Revisions are timestamps: one from the future would lock out the owner's real updates.
     if (p.rev or 0) > GH.Now() + 86400 then return end
+    -- A guildie still on an older build names themselves by their first name alone. Take it as
+    -- theirs and file it under the name the SERVER uses - the one the roster and their other
+    -- guildies already agree on - so one character does not become two records across the guild.
+    -- Before the gate below, which asks the roster about a name the roster has never heard of.
+    if OldSpellingOf(p.owner, sender) then p.owner = sender end
     if p.owner == GH.Me() then
         Sync.RestoreSelf(p, sender)
         return

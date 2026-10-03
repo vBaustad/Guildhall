@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **A guildie who hasn't updated yet is still part of your guild.** A Guildhall older than
+  0.2.0-beta7 tells everyone its own name without the surname - "Morgan" where the server says
+  "Morgan Smith" - and an updated Guildhall was throwing those profiles away, because the name in
+  them is not the name the guild roster uses. The guildie simply vanished: no professions, no
+  listings, nothing. That meant the first person in a guild to update went blind to everyone who
+  had not. Their profile is now recognised as theirs and filed under the name the server uses, so
+  the guild agrees on one spelling and nobody disappears while an update works its way round.
+  Two guildies who really do share a first name are never merged: it takes an exact match on the
+  sender's own first name, and a different surname is a different player.
+
 - **A guildie running an older Guildhall is named, instead of being invisible.** Two Guildhalls that
   speak different protocol versions cannot read each other at all - nothing you share reaches them,
   nothing they share reaches you, and each of you is simply missing from the other's guild. On the
