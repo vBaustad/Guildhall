@@ -692,6 +692,66 @@ function GH.RenameOwner(from, to)
     end
 end
 
+-- ---------------------------------------------------------------------------
+-- Guildies saved twice, under the two spellings of one name
+-- ---------------------------------------------------------------------------
+-- The same split as above, but in other people's records rather than our own. A guildie running a
+-- build that read only the first half of its own name announced "Bremse" while the roster and
+-- everyone else said "Bremse Kloss", so both got stored - and the guild shows one person twice,
+-- with two different skill levels against the same profession. Profiles no longer ARRIVE that way,
+-- but nothing has ever cleaned up the ones already saved, and Guildhall never prunes, so without
+-- this the ghost sits in every guild that ever ran an older client.
+--
+-- Safe because EVERY Forever character has a surname: a stored key without one cannot be a real
+-- character, only an older build naming itself. It still takes exactly ONE candidate - if two
+-- guildies share a first name there is no way to tell which is meant, and guessing would move one
+-- person's professions into another's record. Those are left alone and named in /gh selftest.
+GH.splitGuildies = {}
+
+function GH.MergeGuildieNames()
+    wipe(GH.splitGuildies)
+    -- Fail closed, like the merge above: without the codec we cannot compare posts by item, and a
+    -- migration that throws at login is worse than one that waits for the next login.
+    if not (GH.Codec and GH.Codec.ItemIdFromString) then return end
+    for _, g in pairs(GH.DB().guilds) do
+        local renames = {}
+        for key in pairs(g.members or {}) do
+            local name, realm = key:match("^(.*)%-([^%-]+)$")
+            if name and not name:find("%s") then
+                local matches = {}
+                for other in pairs(g.members) do
+                    local oName, oRealm = other:match("^(.*)%-([^%-]+)$")
+                    if oName and oName ~= name and (oName:match("^%S+") or oName) == name
+                        and NormalizeRealm(oRealm) == NormalizeRealm(realm) then
+                        matches[#matches + 1] = other
+                    end
+                end
+                if #matches == 1 then
+                    renames[#renames + 1] = { key, matches[1] }
+                elseif #matches > 1 then
+                    table.sort(matches)
+                    GH.splitGuildies[#GH.splitGuildies + 1] = key .. " -> " .. table.concat(matches, " / ")
+                end
+            end
+        end
+        -- Collected first and applied after: RenameOwner ADDS a key, and adding one to a table that
+        -- is being walked with pairs() is undefined in Lua.
+        for _, both in ipairs(renames) do
+            local from, to = both[1], both[2]
+            local short, full = g.members[from], g.members[to]
+            if short and full then
+                local merged = MergeCharRecord(short, full)
+                merged.owner = to
+                g.members[to] = merged
+                g.members[from] = nil
+            end
+            -- Their craft requests travel with them: RenameOwner moves the orders and the ids.
+            GH.RenameOwner(from, to)
+            GH.dbg("merged guildie %s into %s", from, to)
+        end
+    end
+end
+
 function GH.GuildName()
     return IsInGuild() and GetGuildInfo("player") or nil
 end
@@ -800,6 +860,7 @@ GH.On("PLAYER_LOGIN", function()
     GH.DB()
     GH.MergeGuildKeys()
     GH.MergeCharNames()
+    GH.MergeGuildieNames()
     GH.MyData()
     -- Let LibForever compare our table with the other YippYapp addons': if none of them loaded, the
     -- client dropped them all. It says so once for the whole family, so we stay quiet then.

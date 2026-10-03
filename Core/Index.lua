@@ -497,6 +497,10 @@ function GH.SelfTest(quiet)
     -- to touch are named here rather than merged behind your back.
     check("your own characters are each stored once",
         #(GH.ambiguousNames or {}) == 0, table.concat(GH.ambiguousNames or {}, ", "))
+    -- The same split in other people's records. Those it could not resolve - two guildies sharing a
+    -- first name, so no way to tell which the stray belongs to - are named rather than guessed at.
+    check("no guildie is stored under two spellings of their name",
+        #(GH.splitGuildies or {}) == 0, table.concat(GH.splitGuildies or {}, ", "))
     local others = GH.MyOtherNames and GH.MyOtherNames() or {}
     check("nothing of yours is left under another spelling of your name",
         #others == 0, table.concat(others, ", "))

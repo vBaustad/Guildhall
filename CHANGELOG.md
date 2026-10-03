@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **A guildie showing up twice in your guild is folded back into one.** The same guildie could be
+  saved under both spellings of their name - "Bremse" and "Bremse Kloss" - and then appear twice in
+  a profession list, with two different skill levels. New profiles no longer arrive that way, but
+  nothing had ever cleaned up the ones already saved, and Guildhall does not throw anything away on
+  its own. They are merged at login under the name the server uses: the higher skill wins, every
+  recipe either copy knew is kept, and their craft requests come with them. If two guildies really
+  do share a first name there is no way to tell which a stray record belongs to, so those are left
+  exactly as they are and named in `/gh selftest` instead of being guessed at.
+
 - **A guildie who hasn't updated yet is still part of your guild.** A Guildhall older than
   0.2.0-beta7 tells everyone its own name without the surname - "Morgan" where the server says
   "Morgan Smith" - and an updated Guildhall was throwing those profiles away, because the name in
