@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **A guildie running an older Guildhall is named, instead of being invisible.** Two Guildhalls that
+  speak different protocol versions cannot read each other at all - nothing you share reaches them,
+  nothing they share reaches you, and each of you is simply missing from the other's guild. On the
+  newer side that was completely silent: somebody still on an old version looked exactly like
+  somebody with no addon installed. From their side you came online once and then never said
+  anything again. Guildhall now says who it is and that they need to update - once per guildie, not
+  once per message - and `/gh status` lists them for anyone who missed it at login.
+- A version number sent by another player is stripped to letters, digits, dots and dashes before it
+  is printed in your chat, so it cannot carry a colour code or a fake item link.
+
 - **A guildie who is talking to you is online, whatever the roster thinks.** Forever never lets an
   addon ask for a fresh guild roster - asking pops the "blocked from an action" dialog - so the copy
   Guildhall holds is whatever the server last pushed, and it can be an hour old. It was allowed to

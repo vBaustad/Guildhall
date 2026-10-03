@@ -132,12 +132,38 @@ local function VersionNum(v)
     return tonumber(a) * 10000 + tonumber(b) * 100 + (tonumber(c) or 0)
 end
 
+-- A version string arrives from another player and both messages below print it into a chat frame,
+-- so it is reduced to what a version can actually contain rather than having the dangerous parts
+-- removed: a whitelist cannot be got round, and "|" is how you smuggle in a colour code or a fake
+-- item link. The explicit ranges are deliberate - %w and %a are byte-wise and locale-dependent, so
+-- they can let a high byte through and then the cut at 20 lands inside a character.
+local function SafeVersion(v)
+    v = (tostring(v or ""):gsub("[^0-9A-Za-z%.%-]", "")):sub(1, 20)
+    return v ~= "" and v or "an older version"
+end
+
 local function SeePeer(sender, version)
     Sync.peers[sender] = { version = version, seen = GH.Now() }
     if not versionNudged and VersionNum(version) > VersionNum(GH.VERSION) then
         versionNudged = true
-        GH.msg("a guildie is running Guildhall %s - you have %s. Update to stay in sync.", version, GH.VERSION)
+        GH.msg("a guildie is running Guildhall %s - you have %s. Update to stay in sync.",
+            SafeVersion(version), GH.VERSION)
     end
+    GH.Fire("PEER_SEEN", sender)
+end
+
+-- A guildie whose Guildhall speaks an OLDER protocol than ours. Nothing they send can be read here
+-- and nothing we send can be read there, so each of us is missing from the other's guild entirely.
+-- Before this they were simply silent: from our side somebody on an incompatible version looked
+-- exactly like somebody with no addon installed, which is not a thing either of us can work out.
+-- Say it once per guildie, and name them, because the fix is theirs to apply and not ours.
+Sync.oldPeers = {}
+local function OldPeer(sender, version)
+    if Sync.oldPeers[sender] then return end
+    Sync.oldPeers[sender] = SafeVersion(version)
+    GH.msg("|cffff6060%s is running Guildhall %s and can't sync with you.|r Nothing either of you "
+        .. "shares reaches the other until they update - you will not see their items and they "
+        .. "will not see yours.", GH.Short(sender), Sync.oldPeers[sender])
     GH.Fire("PEER_SEEN", sender)
 end
 
@@ -461,7 +487,12 @@ function Sync:OnCommReceived(prefix, message, dist, sender)
     local f = { strsplit("\t", header) }
     local kind, proto = f[1], tonumber(f[2])
     if proto ~= PROTO then
-        if (kind == "HI" or kind == "YO") and proto and proto > PROTO then SeePeer(sender, f[3]) end
+        -- We cannot read a message from another protocol, but a hello still tells us somebody is
+        -- there - and which way the mismatch goes decides whose problem it is. Newer than us: we
+        -- update. Older than us: they do, and they have no way of knowing unless we say so.
+        if (kind == "HI" or kind == "YO") and proto then
+            if proto > PROTO then SeePeer(sender, f[3]) else OldPeer(sender, f[3]) end
+        end
         return
     end
     local fn = H[kind]
@@ -541,6 +572,15 @@ function GH.PrintStatus()
     local d = GH.MyData()
     GH.msg("v%s, %s stored (%d relayed), %d online with Guildhall. Your rev: %d.",
         GH.VERSION, GH.Count(members, "guildie profile"), relays, peers, d and d.rev or 0)
+    local old = {}
+    for full, version in pairs(Sync.oldPeers) do
+        old[#old + 1] = ("%s (%s)"):format(GH.Short(full), version)
+    end
+    if #old > 0 then
+        table.sort(old)
+        GH.msg("|cffff6060not syncing - older Guildhall:|r %s. They need to update; nothing passes "
+            .. "between you until they do.", table.concat(old, ", "))
+    end
     local roster = 0
     for _ in pairs(GH.roster) do roster = roster + 1 end
     local refused, parts = 0, {}
