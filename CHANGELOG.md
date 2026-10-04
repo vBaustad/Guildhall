@@ -1,6 +1,6 @@
 # Guildhall
 
-## Unreleased
+## 0.2.0-beta8
 
 - **A guildie showing up twice in your guild is folded back into one.** The same guildie could be
   saved under both spellings of their name - "Bremse" and "Bremse Kloss" - and then appear twice in
