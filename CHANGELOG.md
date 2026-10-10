@@ -1,5 +1,10 @@
 # Guildhall
 
+## Unreleased
+
+- An item whose recipe carries no skill requirement in the game data now says so, instead of
+  stating that you can make it at skill 0. Two recipes in the current Forever data are like that.
+
 ## 0.2.0-beta8
 
 - **A guildie showing up twice in your guild is folded back into one.** The same guildie could be

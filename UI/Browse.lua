@@ -148,6 +148,14 @@ local function PersonLabel(owner, class)
     return "|cff8a8a8a" .. GH.Short(owner) .. "|r"
 end
 
+-- The skill a recipe needs, or nil when the data does not say. A zero is the generated data having
+-- no threshold for that recipe, not a recipe you can make at skill zero - and zero is TRUTHY in
+-- Lua, so "learn or yellow" hands it straight through and the panel states it as fact. Two Forever
+-- recipes currently carry 0 and would read as "First Aid 0".
+local function Skill(n)
+    return (type(n) == "number" and n > 0) and n or nil
+end
+
 local function RenderDetail()
     local d = view.detail
     local content = d.content
@@ -201,7 +209,8 @@ local function RenderDetail()
         #listings, #listings == 1 and "has" or "have", #wants, #wants == 1 and "wants" or "want")
     local recipe = I.RecipeInfoFor(key)
     if recipe then
-        local req = { ("%s %s"):format(GH.ProfName(recipe.prof), recipe.learn or recipe.yellow or "?") }
+        local req = { ("%s %s"):format(GH.ProfName(recipe.prof),
+            Skill(recipe.learn) or Skill(recipe.yellow) or "?") }
         local station = C.StationName(recipe.station)
         if station then req[#req + 1] = recipe.camp and ("|cffff9d3f" .. station .. "|r") or station end
         if recipe.qty and recipe.qty > 1 then req[#req + 1] = ("makes %d"):format(recipe.qty) end
