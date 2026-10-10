@@ -2,8 +2,13 @@
 
 ## Unreleased
 
+- **Recipe data updated to Forever build 1.60.1.70334.** Raging Raptor Ribs needs Cooking 180, not
+  275. Nothing was added or removed - 31 recipes have new skill thresholds, and all but three of
+  them are numbers Guildhall never shows you.
 - An item whose recipe carries no skill requirement in the game data now says so, instead of
-  stating that you can make it at skill 0. Two recipes in the current Forever data are like that.
+  stating that you can make it at skill 0. Blizzard zeroed the thresholds on fifteen crafts in
+  build 1.60.1.70170 - mostly camp objects like the First Aid Kit and the Fish Bowl - so Guildhall
+  says "?" for those rather than inventing a number for them.
 
 ## 0.2.0-beta8
 
