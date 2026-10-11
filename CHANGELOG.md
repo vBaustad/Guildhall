@@ -1,6 +1,6 @@
 # Guildhall
 
-## Unreleased
+## 0.2.0-beta9
 
 - **Recipe data updated to Forever build 1.60.1.70334.** Raging Raptor Ribs needs Cooking 180, not
   275. Nothing was added or removed - 31 recipes have new skill thresholds, and all but three of
