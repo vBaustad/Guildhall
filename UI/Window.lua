@@ -132,6 +132,18 @@ function GH.ToggleWindow()
     end
 end
 
+-- Opening Guildhall from a button. Three things do it now - the minimap icon, the addon
+-- compartment and the button on Blizzard's guild window - and they must agree, so they share this.
+-- Landing on Requests is still "open the addon": it is the one moment Guildhall has something
+-- waiting for you. A second click closes the window, as everywhere else in the family.
+function GH.OpenMain()
+    if not GH.WindowShown() and GH.Orders.NewCount() > 0 then
+        GH.ShowTab("requests")
+    else
+        GH.ToggleWindow()
+    end
+end
+
 function GH.WindowShown(tabId)
     return win and win:IsShown() and (not tabId or activeTab == tabId)
 end

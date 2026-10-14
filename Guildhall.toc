@@ -42,4 +42,5 @@ UI\Browse.lua
 UI\Mine.lua
 UI\Requests.lua
 UI\Minimap.lua
+UI\GuildWindow.lua
 UI\Options.lua

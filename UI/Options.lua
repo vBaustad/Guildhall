@@ -199,14 +199,23 @@ local function Build(f, extraButton)
     -- Least-used last, as above. The library owns this one: it is LibDBIcon's state, read with
     -- IsMinimapButtonShown and written with SetMinimapButtonShown, and never cached here. A nil
     -- means nobody has chosen, which is shown - so the test is "not false", not "is true".
+    heading("Where Guildhall appears")
     if LIB and LIB.IsMinimapButtonShown and LIB.SetMinimapButtonShown then
-        heading("Minimap")
         checkboxFor("Show Guildhall in the minimap row",
             "The YippYapp button by the minimap holds one icon for each of these addons you have. "
             .. "Turn this off to keep Guildhall out of it - /gh and the addons button still open it.",
             function() return LIB.IsMinimapButtonShown("Guildhall") ~= false end,
             function(on) LIB.SetMinimapButtonShown("Guildhall", on) end)
     end
+    -- Takes effect without a reload, so somebody who turns it off can see that it worked.
+    checkboxFor("Show a Guildhall button on the guild window",
+        "A button in the bottom-left of Blizzard's own Guild & Communities window, which is where "
+        .. "you already are when you are thinking about your guild.",
+        function() return GH.Settings().guildWindowButton ~= false end,
+        function(on)
+            GH.Settings().guildWindowButton = on
+            if GH.RefreshGuildWindowButton then GH.RefreshGuildWindowButton() end
+        end)
 
     -- Bottom: a way into Guildhall, and then the help text, which Refresh places because its
     -- position depends on where the controls above actually finished.

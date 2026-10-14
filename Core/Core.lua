@@ -245,6 +245,7 @@ local SETTING_DEFAULTS = {
     tooltipCrafters = false,
     -- The minimap button lives in settings.minimap (LibDBIcon's format). Old minimapAngle/hideMinimap
     -- values are migrated once by UI/Minimap.lua, so they have no defaults here.
+    guildWindowButton = true,  -- a Guildhall button on Blizzard's own guild window
     notifyRequests = true,   -- chat + sound when someone asks you to craft
     notifyWanted = true,     -- chat line when a guildie wants something you can make
     listingDays = 14,        -- listings expire after this many days

@@ -1,5 +1,12 @@
 # Guildhall
 
+## Unreleased
+
+- **A Guildhall button on Blizzard's own guild window**, bottom left, because that is where you
+  already are when you are thinking about your guild. Asked for on CurseForge. Turn it off under
+  "Where Guildhall appears" in the settings if you would rather not have it; that takes effect
+  straight away, no reload.
+
 ## 0.2.0-beta9
 
 - **Recipe data updated to Forever build 1.60.1.70334.** Raging Raptor Ribs needs Cooking 180, not

@@ -7,12 +7,8 @@ local LIB = LibStub and LibStub("LibForever-1.0", true)
 local function OnClick(_, button)
     if button == "RightButton" then
         GH.OpenOptions()
-    elseif not GH.WindowShown() and GH.Orders.NewCount() > 0 then
-        -- Opening on Requests is still "open the addon": it's the one moment Guildhall has something
-        -- waiting for you. A second click closes the window, as everywhere else in the family.
-        GH.ShowTab("requests")
     else
-        GH.ToggleWindow()
+        GH.OpenMain()
     end
 end
 
@@ -51,12 +47,8 @@ end
 function Guildhall_OnAddonCompartmentClick(_, button)
     if button == "RightButton" then
         GH.OpenOptions()
-    elseif not GH.WindowShown() and GH.Orders.NewCount() > 0 then
-        -- Opening on Requests is still "open the addon": it's the one moment Guildhall has something
-        -- waiting for you. A second click closes the window, as everywhere else in the family.
-        GH.ShowTab("requests")
     else
-        GH.ToggleWindow()
+        GH.OpenMain()
     end
 end
 
