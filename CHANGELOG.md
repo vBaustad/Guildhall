@@ -5,7 +5,8 @@
 - **A Guildhall button on Blizzard's own guild window**, bottom left, because that is where you
   already are when you are thinking about your guild. Asked for on CurseForge. Turn it off under
   "Where Guildhall appears" in the settings if you would rather not have it; that takes effect
-  straight away, no reload.
+  straight away, no reload. It sits beside Invite Member, and keeps out of the way of whatever
+  else that window happens to be showing - which buttons it has depends on your rank in the guild.
 
 ## 0.2.0-beta9
 
