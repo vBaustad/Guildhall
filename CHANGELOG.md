@@ -1,5 +1,10 @@
 # Guildhall
 
+## Unreleased
+
+- `/gh status` now reports how much memory Guildhall is using, next to the total across every addon
+  you have loaded. If an addon is eating your memory, that tells you which one it is.
+
 ## 0.2.0-beta10
 
 - **A Guildhall button on Blizzard's own guild window**, next to Invite Member, because that is

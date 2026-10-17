@@ -616,6 +616,17 @@ function GH.PrintStatus()
         GH.msg("|cffff6060not syncing - older Guildhall:|r %s. They need to update; nothing passes "
             .. "between you until they do.", table.concat(old, ", "))
     end
+    -- Memory, because "this addon is using all my memory" is a report we cannot answer by arguing.
+    -- Guildhall's own number next to the total across every addon loaded turns it into a fact
+    -- somebody can paste back, and it is as useful when the answer is "yes, it is us".
+    if UpdateAddOnMemoryUsage and GetAddOnMemoryUsage and C_AddOns and C_AddOns.GetNumAddOns then
+        UpdateAddOnMemoryUsage()
+        local mine = GetAddOnMemoryUsage(ADDON) or 0
+        local total, n = 0, C_AddOns.GetNumAddOns() or 0
+        for i = 1, n do total = total + (GetAddOnMemoryUsage(i) or 0) end
+        GH.msg("memory: Guildhall %.2f MB of %.1f MB across %d addons.",
+            mine / 1024, total / 1024, n)
+    end
     local roster = 0
     for _ in pairs(GH.roster) do roster = roster + 1 end
     local refused, parts = 0, {}
