@@ -125,6 +125,11 @@ local function MakeDetailRow(parent)
     r.b2 = U.Button(r, "Request", 62, 18)
     r.b2:SetPoint("RIGHT", r.b1, "LEFT", -3, 0)
     r.note:SetPoint("RIGHT", r.b2, "LEFT", -6, 0)
+    -- The skill line needs the same right edge as the note below it. Without one it has only a
+    -- LEFT anchor, so it grows rightwards for ever and prints straight through the buttons -
+    -- "Enchanting 181" under "Request". Anchoring the right edge only bounds the width; the
+    -- vertical still comes from the LEFT point, so it stays on the name's line.
+    r.meta:SetPoint("RIGHT", r.b2, "LEFT", -6, 0)
     r:SetScript("OnEnter", function(self)
         if not self.tip then return end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -207,8 +212,16 @@ local function RenderDetail()
     local crafters = I.SortPeople(I.CrafterList(e))
     local listings = I.SortPeople({ unpack(e.listings) })
     local wants = I.SortPeople({ unpack(e.wants) })
-    local sub = ("%s, %d %s one, %d %s one"):format(GH.Count(#crafters, "crafter"),
-        #listings, #listings == 1 and "has" or "have", #wants, #wants == 1 and "wants" or "want")
+    -- Only what there is. "1 crafter, 0 have one, 0 want one" is two thirds nothing, on every item
+    -- you click, and the list rows next to it already say it this way.
+    local bits = { GH.Count(#crafters, "crafter") }
+    if #listings > 0 then
+        bits[#bits + 1] = ("%d %s one"):format(#listings, #listings == 1 and "has" or "have")
+    end
+    if #wants > 0 then
+        bits[#bits + 1] = ("%d %s one"):format(#wants, #wants == 1 and "wants" or "want")
+    end
+    local sub = table.concat(bits, ", ")
     local recipe = I.RecipeInfoFor(key)
     if recipe then
         local req = { ("%s %s"):format(GH.ProfName(recipe.prof),
