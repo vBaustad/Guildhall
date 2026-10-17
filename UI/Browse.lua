@@ -202,7 +202,9 @@ local function RenderDetail()
         d.mats:SetText("")
     end
 
-    local crafters = I.SortPeople({ unpack(e.crafters) })
+    -- One item's crafters, as real rows: the detail pane sorts them and reads every field, and a
+    -- single item's worth is bounded. Nothing else in the UI may do this - see I.CrafterList.
+    local crafters = I.SortPeople(I.CrafterList(e))
     local listings = I.SortPeople({ unpack(e.listings) })
     local wants = I.SortPeople({ unpack(e.wants) })
     local sub = ("%s, %d %s one, %d %s one"):format(GH.Count(#crafters, "crafter"),
@@ -341,7 +343,10 @@ end
 local function GroupOf(r)
     local recipe = I.RecipeInfoFor(r.key)
     if recipe and recipe.prof then return GH.ProfName(recipe.prof) end
-    if #r.crafters > 0 then return r.crafters[1].prof end
+    if #r.crafters > 0 then
+        local src = I.Source(r.crafters[1])
+        if src then return src.prof end
+    end
     if #r.listings > 0 then return HAVE_GROUP end
     return WANT_GROUP
 end
@@ -841,11 +846,14 @@ local function Build(f)
             local parts = {}
             if #r.crafters > 0 then
                 local on = 0
-                for _, c in ipairs(r.crafters) do if GH.IsOnline(c.owner) then on = on + 1 end end
+                for i = 1, #r.crafters do
+                    local src = I.Source(r.crafters[i])
+                    if src and GH.IsOnline(src.owner) then on = on + 1 end
+                end
                 local who
                 if #r.crafters == 1 then
-                    local c = r.crafters[1]
-                    who = c.owner == GH.Me() and "you" or GH.Short(c.owner)
+                    local src = I.Source(r.crafters[1]) or {}
+                    who = src.owner == GH.Me() and "you" or GH.Short(src.owner)
                 else
                     who = GH.Count(#r.crafters, "crafter")
                 end

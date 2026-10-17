@@ -4,7 +4,20 @@ local C = GH.Codec
 local I = {}
 GH.Index = I
 
-local index = {}      -- [key] = { key, crafters = {...}, listings = {...}, wants = {...} }
+-- [key] = { key, crafters = { sourceIndex... }, spells = { spellID... }, listings, wants }
+--
+-- `crafters` and `spells` are INTEGERS, not rows. Everything about a crafter except which recipe
+-- they use - their name, class, profession, skill and staleness - belongs to the person, not to the
+-- item, and a guild of 400 who each know a thousand recipes has a million of these. Storing a
+-- seven-field table per item per person stored the same name a million times: measured at 298 MB
+-- against 28 MB for two integer arrays, because a table costs a few hundred bytes and an integer in
+-- a list costs sixteen.
+--
+-- So the person-and-profession is stored ONCE in `sources` and referred to by number. Read a
+-- crafter with I.Source(n), which hands back the shared row and allocates nothing.
+local index = {}
+local sources = {}    -- [n] = { owner, class, prof, profID, rank, stale }, one per person+profession
+local sourceAt = {}   -- ["owner\0profID"] = n, so AddProfile can find one it has already made
 local wantedByOthers = {}   -- item IDs guildies have posted as wanted, collected while building
 local dirty = true
 
@@ -32,10 +45,31 @@ GH.On("PLAYER_REGEN_ENABLED", function() if dirty then ScheduleBuild() end end)
 local function Entry(key)
     local e = index[key]
     if not e then
-        e = { key = key, crafters = {}, listings = {}, wants = {} }
+        e = { key = key, crafters = {}, spells = {}, listings = {}, wants = {} }
         index[key] = e
     end
     return e
+end
+
+--- The person behind a crafter number: the SHARED row, so never hold it past the loop you read it
+--- in and never write to it. Nothing is copied, which is the whole point.
+function I.Source(n)
+    return sources[n]
+end
+
+--- A crafter of this item as a row of its own: { owner, class, prof, profID, rank, stale, spell }.
+--- This DOES allocate, so it is for the places that handle one item at a time - the detail pane,
+--- a tooltip, the self test - and never for a sweep over the whole index.
+function I.CrafterList(e)
+    local out = {}
+    for i = 1, #e.crafters do
+        local src = sources[e.crafters[i]]
+        if src then
+            out[#out + 1] = { owner = src.owner, class = src.class, prof = src.prof,
+                profID = src.profID, rank = src.rank, stale = src.stale, spell = e.spells[i] }
+        end
+    end
+    return out
 end
 
 -- One crafter row per character and item, naming the profession that actually teaches the recipe.
@@ -65,9 +99,19 @@ end
 local function AddProfile(p, listings, wants)
     if GH.IsBlocked(p.owner) then listings, wants = nil, nil end
     for key, c in pairs(I.CraftersIn(p)) do
-        local list = Entry(key).crafters
-        list[#list + 1] = { owner = p.owner, class = p.class, prof = GH.ProfName(c.profID), profID = c.profID,
-            rank = c.rank, spell = c.spell, stale = p.stale }
+        -- One row per person AND profession, because rank and profession name differ between a
+        -- character's professions while the name and class do not.
+        local at = p.owner .. "\0" .. tostring(c.profID)
+        local n = sourceAt[at]
+        if not n then
+            sources[#sources + 1] = { owner = p.owner, class = p.class, prof = GH.ProfName(c.profID),
+                profID = c.profID, rank = c.rank, stale = p.stale }
+            n = #sources
+            sourceAt[at] = n
+        end
+        local e = Entry(key)
+        e.crafters[#e.crafters + 1] = n
+        e.spells[#e.spells + 1] = c.spell
     end
     for _, l in ipairs(listings or {}) do
         local id = C.ItemIdFromString(l.item)
@@ -91,6 +135,8 @@ end
 
 function I.Build()
     wipe(index)
+    wipe(sources)
+    wipe(sourceAt)
     wipe(wantedByOthers)
     -- Right after login the guild name can still be unknown: stay dirty so the next search or
     -- GUILD_CHANGED builds it for real, instead of keeping an empty index.
@@ -247,8 +293,12 @@ function I.Search(query, opts)
         elseif q == "" or name:lower():find(q, 1, true) then
             local crafters, listings, wants = {}, {}, {}
             if source == "all" or source == "crafts" then
-                for _, c in ipairs(e.crafters) do
-                    if keep(c.owner) and (not opts.prof or c.prof == opts.prof) then crafters[#crafters + 1] = c end
+                for i = 1, #e.crafters do
+                    local n = e.crafters[i]
+                    local src = sources[n]
+                    if src and keep(src.owner) and (not opts.prof or src.prof == opts.prof) then
+                        crafters[#crafters + 1] = n
+                    end
                 end
             end
             if postsFit(key) and (source == "all" or source == "listings") then
@@ -346,7 +396,7 @@ function I.RecipesFor(key)
     local list = byOutput[key]
     if list then return list end
     local e = I.Get(key)
-    if e and e.crafters[1] and e.crafters[1].spell then return { e.crafters[1].spell } end
+    if e and e.spells[1] then return { e.spells[1] } end
     return nil
 end
 
@@ -380,7 +430,7 @@ local function AddTooltipLines(tt, itemID)
     tt.guildhallDone = true
     local shown = false
     if #e.crafters > 0 and GH.Settings().tooltipCrafters then
-        tt:AddLine("|cffe6b34dGuild crafters:|r " .. NameList(e.crafters, 4), 1, 1, 1, true)
+        tt:AddLine("|cffe6b34dGuild crafters:|r " .. NameList(I.CrafterList(e), 4), 1, 1, 1, true)
         shown = true
     end
     if #e.listings > 0 then
@@ -515,12 +565,16 @@ function GH.SelfTest(quiet)
     local dupes = 0
     for key, e in pairs(index) do
         local seen = {}
-        for _, c in ipairs(e.crafters) do
-            if seen[c.owner] then
-                dupes = dupes + 1
-                GH.dbg("duplicate crafter %s for %s", c.owner, tostring(I.Name(key) or key))
+        for i = 1, #e.crafters do
+            local src = I.Source(e.crafters[i])
+            local owner = src and src.owner
+            if owner then
+                if seen[owner] then
+                    dupes = dupes + 1
+                    GH.dbg("duplicate crafter %s for %s", owner, tostring(I.Name(key) or key))
+                end
+                seen[owner] = true
             end
-            seen[c.owner] = true
         end
     end
     check("no duplicate crafters in your guild's index", dupes == 0, ("%d duplicate(s)"):format(dupes))

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Guildhall uses far less memory in a large guild.** It was storing each crafter's name, class,
+  profession and skill once per item they can make, rather than once per person - so in a big
+  guild the same name was held a million times. Measured, a 150-guildie guild drops from about
+  38 MB to 5 MB, and a very large one from around 300 MB to 28 MB. Nothing about what you see
+  changes.
 - `/gh status` now reports how much memory Guildhall is using, next to the total across every addon
   you have loaded. If an addon is eating your memory, that tells you which one it is.
 
