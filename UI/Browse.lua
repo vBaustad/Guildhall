@@ -248,7 +248,10 @@ local function RenderDetail()
         d.name:SetText("")
         d.sub:SetText("")
         d.wantBtn:Hide()
-        d.mats:SetText("")
+        -- d.mats is the pool of reagent buttons, not a line of text: clearing it means putting
+        -- them away. LayoutMaterials with nothing to lay out does exactly that, and keeping the
+        -- one path means there is no second place to forget.
+        LayoutMaterials(d, nil)
         d.empty:Show()
         content:SetHeight(10)
         return
