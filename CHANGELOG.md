@@ -2,11 +2,15 @@
 
 ## Unreleased
 
-- **Browse tells you where you are.** The "< All professions" button in the top right is gone, and
-  a trail in the top left takes its place: *All professions > Enchanting*, where the first part
-  takes you back. The profession icons sit at the right edge now so they stop moving about, the one
-  you picked stands out properly, and a long item name wraps instead of being cut off. A list that
-  is all one profession no longer carries a heading saying so.
+- **Browse tells you where you are, and the way back is an arrow.** The "< All professions" button
+  in the top right is gone; there is a back arrow in the top left with the profession's name beside
+  it, where the game's own journals put one. The profession icons sit at the right edge now so they
+  stop moving about, and the one you picked stands out properly.
+- **Less text is cut off.** The people list under an item has taller rows, so "offline - requests
+  wait until they log in" fits instead of ending in a stub, and each row shows the crafter's skill
+  rather than repeating the profession named directly above the list. A long item name wraps onto a
+  second line instead of being cut. A list that is all one profession no longer carries a heading
+  saying so.
 
 - **Guildhall uses far less memory in a large guild.** It was storing each crafter's name, class,
   profession and skill once per item they can make, rather than once per person - so in a big

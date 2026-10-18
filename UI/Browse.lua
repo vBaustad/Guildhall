@@ -5,7 +5,11 @@ local U, C, I = GH.UI, GH.Codec, GH.Index
 local state = { query = "", source = "all", prof = nil, online = false, selected = nil }
 local view      -- the tab frame
 local LIST_ROWS, LIST_ROW_H = 15, 22
-local DETAIL_ROW_H = 36
+-- Tall enough that the note below the name clears the buttons. At 36 the buttons sat in the
+-- middle of the row, which is exactly where the second line of text is, so the note had to be
+-- truncated at their left edge - "offline - requests wait until they log in (fro...". The buttons
+-- now take the top line beside the name and the note has the whole width underneath.
+local DETAIL_ROW_H = 44
 -- The name column in a detail row. The row is about 410 wide: two 62pt buttons and the skill or
 -- quantity beside the name need the rest, which leaves this much for the name itself.
 local NAME_COL_W = 170
@@ -119,12 +123,12 @@ local function MakeDetailRow(parent)
     r.meta = U.Text(r, "GameFontHighlightSmall")
     r.meta:SetPoint("LEFT", r.name, "RIGHT", 8, 0)
     r.note = U.Text(r, "GameFontDisableSmall")
-    r.note:SetPoint("TOPLEFT", 6, -20)
+    r.note:SetPoint("TOPLEFT", 6, -25)
     r.b1 = U.Button(r, "Whisper", 62, 18)
-    r.b1:SetPoint("RIGHT", -4, 0)
+    r.b1:SetPoint("TOPRIGHT", -4, -4)
     r.b2 = U.Button(r, "Request", 62, 18)
-    r.b2:SetPoint("RIGHT", r.b1, "LEFT", -3, 0)
-    r.note:SetPoint("RIGHT", r.b2, "LEFT", -6, 0)
+    r.b2:SetPoint("TOPRIGHT", r.b1, "TOPLEFT", -3, 0)
+    r.note:SetPoint("RIGHT", r, "RIGHT", -6, 0)
     -- The skill line needs the same right edge as the note below it. Without one it has only a
     -- LEFT anchor, so it grows rightwards for ever and prints straight through the buttons -
     -- "Enchanting 181" under "Request". Anchoring the right edge only bounds the width; the
@@ -273,7 +277,10 @@ local function RenderDetail()
             local isMe = c.owner == GH.Me()
             r.owner = c.owner
             r.name:SetText(PersonLabel(c.owner, c.class))
-            r.meta:SetText(("|cff8a8a8a%s %d|r"):format(c.prof, c.rank or 0))
+            -- Their skill, not their profession: the line above the list already says
+            -- "Blacksmithing 40" for this item, so printing "Blacksmithing" again on every row
+            -- spends the width that was truncating it on a word the reader just read.
+            r.meta:SetText(("|cff8a8a8askill %d|r"):format(c.rank or 0))
             local note = isMe and "" or (GH.IsOnline(c.owner) and "|cff60d060online|r" or "offline - requests wait until they log in")
             if c.stale then note = note .. " |cff8a8a8a(from your last session)|r" end
             r.note:SetText(note)
@@ -574,17 +581,26 @@ local function Build(f)
     -- important action, in the corner every WoW window puts a close button. It told you where you
     -- could go and never where you were. A breadcrumb answers both, in four words, where the eye
     -- starts.
-    f.crumbBack = U.LinkButton(f, "All professions")
-    f.crumbBack:SetPoint("TOPLEFT", 6, -36)
+    -- An arrow, in the top left, with the page's name beside it. This is the third thing to
+    -- live here: a red "< All professions" button in the top right read as a close button, and a
+    -- breadcrumb did not read as "back" either. Both of those asked the reader to work out that
+    -- some text was a way out. Blizzard's own journals put a left arrow in this corner and players
+    -- already know it, which beats anything I can invent that is cleverer.
+    f.crumbBack = CreateFrame("Button", nil, f)
+    f.crumbBack:SetSize(22, 22)
+    f.crumbBack:SetPoint("TOPLEFT", 4, -33)
+    f.crumbBack:SetNormalTexture("Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Up")
+    f.crumbBack:SetPushedTexture("Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Down")
+    f.crumbBack:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight")
     f.crumbBack:SetScript("OnClick", function()
         f.search:SetText("")
         state.query = ""
         f.SetProfession(nil)
     end)
-    U.Tooltip(f.crumbBack, "All professions", "Back to the overview.")
-    local lbl = U.Text(f, "GameFontNormalSmall")
+    U.Tooltip(f.crumbBack, "Back", "Back to all professions.")
+    local lbl = U.Text(f, "GameFontNormal")
     f.profLabel = lbl
-    lbl:SetPoint("LEFT", f.crumbBack, "RIGHT", 5, 0)
+    lbl:SetPoint("LEFT", f.crumbBack, "RIGHT", 4, 0)
 
     -- Profession filter icons, anchored from the RIGHT edge. The breadcrumb beside them changes
     -- length with the profession's name, and a row of icons that slides left and right as you
@@ -626,11 +642,9 @@ local function Build(f)
         local trail = {}
         if state.prof then trail[#trail + 1] = state.prof end
         if state.query ~= "" then trail[#trail + 1] = ("\"%s\""):format(state.query) end
-        local out = {}
-        for _, step in ipairs(trail) do
-            out[#out + 1] = ("|cff8a8a8a>|r |cffebdec2%s|r"):format(step)
-        end
-        f.profLabel:SetText(table.concat(out, " "))
+        -- Where you are, beside the way out. Both when both apply: a search inside a profession
+        -- has two answers to "where am I" and naming one of them would be a half-truth.
+        f.profLabel:SetText("|cffebdec2" .. table.concat(trail, "|r |cff8a8a8a/|r |cffebdec2") .. "|r")
     end
 
     -- One way in and out of a profession, used by the icon row, the cards and the breadcrumb.
