@@ -396,9 +396,14 @@ local function Grouped(results, expandAll)
     end)
     local collapsed = Collapsed()
     local rows = {}
+    -- One group needs no heading. A single "Enchanting (39)" over a list that is all Enchanting
+    -- says nothing you did not already know from the breadcrumb, and costs a row of the list.
+    local headings = #order > 1
     for _, g in ipairs(order) do
-        local shut = not expandAll and collapsed[g.name]
-        rows[#rows + 1] = { header = true, group = g.name, count = #g.items, collapsed = shut }
+        local shut = headings and not expandAll and collapsed[g.name]
+        if headings then
+            rows[#rows + 1] = { header = true, group = g.name, count = #g.items, collapsed = shut }
+        end
         if not shut then
             for _, r in ipairs(g.items) do rows[#rows + 1] = r end
         end
@@ -447,7 +452,8 @@ end
 local MODE_WIDGETS = {
     noguild  = { "noGuild" },
     overview = { "search", "source", "online", "secondary", "cardBox" },
-    items    = { "search", "source", "online", "profLabel", "back", "quality", "listBox", "detailBox", "loading" },
+    items    = { "search", "source", "online", "crumbBack", "profLabel", "quality", "listBox",
+                 "detailBox", "loading" },
 }
 
 local function SetMode(mode)
@@ -497,6 +503,7 @@ local function Refresh()
 
     local overview = ShowingOverview()
     SetMode(overview and "overview" or "items")
+    if view.UpdateCrumb then view.UpdateCrumb() end
     if overview then
         view.RenderOverview()
         view.loading:SetText("")
@@ -523,7 +530,9 @@ local function Refresh()
         end
         view.loading:SetText("|cff8a8a8a" .. text .. "|r")
     else
-        view.loading:SetText(("|cff8a8a8a%s|r"):format(GH.Count(#results, "item")))
+        -- The filter buttons above already say "Everything (39)". Saying 39 again in the corner is
+        -- the same fact twice, and the corner is where "loading" and "no matches" need to be seen.
+        view.loading:SetText("")
     end
     RenderDetail()
 end
@@ -560,18 +569,33 @@ local function Build(f)
         Refresh()
     end)
 
-    -- Profession filter icons
-    f.profButtons = {}
+    -- Where you are, top left, reading the way you read. The button that used to do this said
+    -- "< All professions" in the top RIGHT corner - the loudest thing on the screen, on the least
+    -- important action, in the corner every WoW window puts a close button. It told you where you
+    -- could go and never where you were. A breadcrumb answers both, in four words, where the eye
+    -- starts.
+    f.crumbBack = U.LinkButton(f, "All professions")
+    f.crumbBack:SetPoint("TOPLEFT", 6, -36)
+    f.crumbBack:SetScript("OnClick", function()
+        f.search:SetText("")
+        state.query = ""
+        f.SetProfession(nil)
+    end)
+    U.Tooltip(f.crumbBack, "All professions", "Back to the overview.")
     local lbl = U.Text(f, "GameFontNormalSmall")
     f.profLabel = lbl
-    lbl:SetPoint("TOPLEFT", 6, -36)
-    lbl:SetText("Profession:")
+    lbl:SetPoint("LEFT", f.crumbBack, "RIGHT", 5, 0)
+
+    -- Profession filter icons, anchored from the RIGHT edge. The breadcrumb beside them changes
+    -- length with the profession's name, and a row of icons that slides left and right as you
+    -- browse is a row you have to re-find every time.
+    f.profButtons = {}
     local prev
     for _, name in ipairs(GH.PROFESSIONS) do
         if not GH.GATHERING[name] then
             local b = CreateFrame("Button", nil, f, "BackdropTemplate")
             b:SetSize(22, 22)
-            if prev then b:SetPoint("LEFT", prev, "RIGHT", 3, 0) else b:SetPoint("LEFT", lbl, "RIGHT", 8, 0) end
+            if prev then b:SetPoint("LEFT", prev, "RIGHT", 3, 0) end
             b:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
             local t = b:CreateTexture(nil, "ARTWORK")
             t:SetPoint("TOPLEFT", 1, -1)
@@ -588,14 +612,37 @@ local function Build(f)
             prev = b
         end
     end
+    -- 22 wide and 3 apart, so the row is n*25 - 3; pin the first one that far in from the edge.
+    if f.profButtons[1] then
+        f.profButtons[1]:SetPoint("TOPRIGHT", f, "TOPRIGHT", -(#f.profButtons * 25 - 3) - 6, -36)
+    end
 
-    -- One way in and out of a profession, used by the icon row, the cards and the back button.
+    -- The breadcrumb, from whatever the screen is showing. It never needs to ask whether there is
+    -- somewhere to go back to: the whole row belongs to the item screen (see MODE_WIDGETS), and
+    -- you only reach that screen by searching or by picking a profession.
+    -- A profession AND a search are both possible at once, so both are named rather than one
+    -- hiding the other - "where am I" has two answers there and the trail should say so.
+    function f.UpdateCrumb()
+        local trail = {}
+        if state.prof then trail[#trail + 1] = state.prof end
+        if state.query ~= "" then trail[#trail + 1] = ("\"%s\""):format(state.query) end
+        local out = {}
+        for _, step in ipairs(trail) do
+            out[#out + 1] = ("|cff8a8a8a>|r |cffebdec2%s|r"):format(step)
+        end
+        f.profLabel:SetText(table.concat(out, " "))
+    end
+
+    -- One way in and out of a profession, used by the icon row, the cards and the breadcrumb.
     function f.SetProfession(name)
         state.prof = name
         for _, other in ipairs(f.profButtons) do
             local on = other.prof == name
             other:SetBackdropBorderColor(on and 1 or 0.3, on and 0.82 or 0.3, on and 0.3 or 0.3, 1)
             other.tex:SetDesaturated(name ~= nil and not on)
+            -- Dim the ones you did not pick as well as colouring the one you did: a gold hairline
+            -- at 22 pixels is not enough on its own to say which of ten is selected.
+            other.tex:SetAlpha((name == nil or on) and 1 or 0.45)
         end
         Refresh()
     end
@@ -612,15 +659,6 @@ local function Build(f)
 
     f.loading = U.Text(f, "GameFontHighlightSmall", "RIGHT")
     f.loading:SetPoint("TOPRIGHT", -6, -62)   -- the filter row above it holds the back button
-
-    -- Back to the overview, shown while a profession or a search is in play.
-    f.back = U.Button(f, "< All professions", 120, 20)
-    f.back:SetPoint("TOPRIGHT", -6, -36)
-    f.back:SetScript("OnClick", function()
-        f.search:SetText("")
-        state.query = ""
-        f.SetProfession(nil)
-    end)
 
     -- Minimum quality for the item list.
     f.quality = U.Segmented(f, {
@@ -846,8 +884,12 @@ local function Build(f)
             if r.header then
                 row.key, row.group = nil, r.group
                 row.icon:SetTexture(GROUP_ICON[r.group] or GH.ProfIcon(r.group))
-                row.name:SetText(("|cffe6b34d%s %s|r |cff8a8a8a(%d)|r"):format(
-                    r.collapsed and "+" or "-", r.group, r.count))
+                -- Blizzard's own collapse buttons rather than a "+" or a "-": a bare hyphen in
+                -- front of a heading reads as a typo, and these exist in every client, which a
+                -- triangle glyph in the game's font does not reliably.
+                row.name:SetText(("|T%s:14|t |cffe6b34d%s|r |cff8a8a8a(%d)|r"):format(
+                    r.collapsed and "Interface\\Buttons\\UI-PlusButton-Up"
+                    or "Interface\\Buttons\\UI-MinusButton-Up", r.group, r.count))
                 row.info:SetText("")
                 row.sel:Hide()
                 return
@@ -897,6 +939,10 @@ local function Build(f)
     d.name = U.Text(detailBox, "GameFontNormalLarge")
     d.name:SetPoint("TOPLEFT", d.icon, "TOPRIGHT", 10, -2)
     d.name:SetPoint("RIGHT", -110, 0)
+    -- Two lines, because the pane below is empty and the item's name is the one thing on this
+    -- screen that must not be guessed at. "Enchant 2H Weapon - Lesser..." is not a name.
+    d.name:SetWordWrap(true)
+    d.name:SetMaxLines(2)
     d.sub = U.Text(detailBox, "GameFontHighlightSmall")
     d.sub:SetPoint("TOPLEFT", d.name, "BOTTOMLEFT", 0, -4)
     -- A quiet link, not a main button: only offered when asking the guild makes sense.

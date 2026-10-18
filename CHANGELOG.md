@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Browse tells you where you are.** The "< All professions" button in the top right is gone, and
+  a trail in the top left takes its place: *All professions > Enchanting*, where the first part
+  takes you back. The profession icons sit at the right edge now so they stop moving about, the one
+  you picked stands out properly, and a long item name wraps instead of being cut off. A list that
+  is all one profession no longer carries a heading saying so.
+
 - **Guildhall uses far less memory in a large guild.** It was storing each crafter's name, class,
   profession and skill once per item they can make, rather than once per person - so in a big
   guild the same name was held a million times. Measured, a 150-guildie guild drops from about
