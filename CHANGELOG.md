@@ -6,6 +6,12 @@
   in the top right is gone; there is a back arrow in the top left with the profession's name beside
   it, where the game's own journals put one. The profession icons sit at the right edge now so they
   stop moving about, and the one you picked stands out properly.
+- **Materials are items you can hover and link.** The list of reagents under an item used to be
+  one line of text that ran off the edge - you could not see the last one, let alone what it was.
+  Each material is its own entry now, wrapping onto as many lines as it needs, with the game's own
+  tooltip on hover and shift-click to link it in chat.
+- The recipe you had open is cleared when you switch profession, instead of staying on screen
+  beside a list it no longer belongs to.
 - **Less text is cut off.** The people list under an item has taller rows, so "offline - requests
   wait until they log in" fits instead of ending in a stub, and each row shows the crafter's skill
   rather than repeating the profession named directly above the list. A long item name wraps onto a

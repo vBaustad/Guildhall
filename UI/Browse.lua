@@ -165,6 +165,77 @@ local function Skill(n)
     return (type(n) == "number" and n > 0) and n or nil
 end
 
+-- One reagent, as a button that behaves like an item everywhere else in the game does.
+local function MaterialButton(parent, i, pool)
+    local b = pool[i]
+    if b then return b end
+    b = CreateFrame("Button", nil, parent)
+    b:SetHeight(16)
+    b.icon = b:CreateTexture(nil, "ARTWORK")
+    b.icon:SetSize(14, 14)
+    b.icon:SetPoint("LEFT", 0, 0)
+    b.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+    b.text = U.Text(b, "GameFontHighlightSmall")
+    b.text:SetPoint("LEFT", b.icon, "RIGHT", 3, 0)
+    b:SetScript("OnEnter", function(self)
+        if not self.itemID then return end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetItemByID(self.itemID)
+        GameTooltip:Show()
+        self.text:SetTextColor(1, 0.82, 0.3)
+    end)
+    b:SetScript("OnLeave", function(self)
+        GameTooltip:Hide()
+        self.text:SetTextColor(1, 1, 1)
+    end)
+    -- Shift-click links it in chat, ctrl-click dresses it up: HandleModifiedItemClick is the one
+    -- the game uses everywhere, so the modifiers are whatever the player already has them set to.
+    b:SetScript("OnClick", function(self)
+        if not self.itemID then return end
+        -- HandleModifiedItemClick decides for itself which modifier does what, and does nothing
+        -- when none is held, so asking first would only be a second opinion about the player's
+        -- own keybindings.
+        local link = select(2, GH.API.GetItemInfo(self.itemID))
+        if link then HandleModifiedItemClick(link) end
+    end)
+    pool[i] = b
+    return b
+end
+
+-- Lay the reagents out left to right, wrapping. Returns how far down they reached, so what comes
+-- after can start below them however many lines they took.
+local function LayoutMaterials(d, reagents)
+    local pool = d.mats
+    for _, b in ipairs(pool) do b:Hide() end
+    if not reagents or #reagents == 0 then
+        d.matsLabel:Hide()
+        return 0
+    end
+    d.matsLabel:Show()
+    local width = d.name:GetParent():GetWidth() - 24
+    if width < 120 then width = 120 end
+    local x, y, line = 0, -16, 0
+    for i, rg in ipairs(reagents) do
+        local b = MaterialButton(d.matsLabel:GetParent(), i, pool)
+        local id, need = rg[1], rg[2]
+        b.itemID = id
+        b.icon:SetTexture(C.KeyIcon(id))
+        b.text:SetText(("%s%dx %s|r"):format(C.KeyColor(id), need, I.Name(id) or "..."))
+        b.text:SetTextColor(1, 1, 1)
+        local w = 14 + 3 + (b.text:GetStringWidth() or 60) + 12
+        if x > 0 and x + w > width then
+            x, y = 0, y - 17
+            line = line + 1
+        end
+        b:SetWidth(w - 12)
+        b:ClearAllPoints()
+        b:SetPoint("TOPLEFT", d.matsLabel, "TOPLEFT", x, y)
+        b:Show()
+        x = x + w
+    end
+    return -y + 18
+end
+
 local function RenderDetail()
     local d = view.detail
     local content = d.content
@@ -200,16 +271,7 @@ local function RenderDetail()
         d.wantBtn:Hide()
     end
 
-    local reagents = I.ReagentsFor(key)
-    if reagents then
-        local parts = {}
-        for _, rg in ipairs(reagents) do
-            parts[#parts + 1] = ("%dx %s"):format(rg[2], I.Name(rg[1]) or "?")
-        end
-        d.mats:SetText("|cffe6b34dMaterials:|r " .. table.concat(parts, ", "))
-    else
-        d.mats:SetText("")
-    end
+    local matsBottom = LayoutMaterials(d, I.ReagentsFor(key))
 
     -- One item's crafters, as real rows: the detail pane sorts them and reads every field, and a
     -- single item's worth is bounded. Nothing else in the UI may do this - see I.CrafterList.
@@ -236,6 +298,14 @@ local function RenderDetail()
         sub = sub .. "  |cff8a8a8a-|r  " .. table.concat(req, ", ")
     end
     d.sub:SetText(sub)
+    -- Everything below the title follows the title, because the title is now one line or two
+    -- depending on the item's name. The materials used to sit at a fixed offset and a long name
+    -- simply printed over them.
+    d.matsLabel:ClearAllPoints()
+    d.matsLabel:SetPoint("TOPLEFT", d.sub, "BOTTOMLEFT", 0, -8)
+    d.scroll:ClearAllPoints()
+    d.scroll:SetPoint("TOPLEFT", d.matsLabel, "BOTTOMLEFT", -4, -(matsBottom))
+    d.scroll:SetPoint("BOTTOMRIGHT", d.scroll:GetParent(), "BOTTOMRIGHT", -28, 6)
 
     local y, ri, hi = -4, 0, 0
     local function heading(text)
@@ -649,6 +719,9 @@ local function Build(f)
 
     -- One way in and out of a profession, used by the icon row, the cards and the breadcrumb.
     function f.SetProfession(name)
+        -- Whatever you had open belonged to the profession you just left. Leaving it on screen
+        -- while the list beside it is a different profession reads as though it is in this one.
+        state.selected = nil
         state.prof = name
         for _, other in ipairs(f.profButtons) do
             local on = other.prof == name
@@ -972,14 +1045,21 @@ local function Build(f)
         end
     end)
     U.Tooltip(d.wantBtn, "Wanted posts", "Lets the guild know you're looking for this item.")
-    d.mats = U.Text(detailBox, "GameFontHighlightSmall")
-    d.mats:SetPoint("TOPLEFT", 10, -54)
-    d.mats:SetPoint("RIGHT", -10, 0)
+    -- Materials, as the items they are. This was one line of text that said
+    -- "8x Medium Leather, 2x Cured Medium Hide, 4x Pristine Leathe..." - truncated at the pane's
+    -- edge, with no way to see what the last one was, let alone what it looks like or where it
+    -- comes from. Each reagent is its own small button now: it wraps rather than being cut, it
+    -- shows the game's own tooltip on hover, and shift-clicking it links the item into chat the
+    -- way every other item in the game does.
+    d.matsLabel = U.Text(detailBox, "GameFontNormalSmall")
+    d.matsLabel:SetText("|cffe6b34dMaterials|r")
+    d.mats = {}
     d.empty = U.Text(detailBox, "GameFontDisable", "CENTER")
     d.empty:SetPoint("CENTER")
     d.empty:SetText("Pick an item to see who can make it.")
 
     local scroll = CreateFrame("ScrollFrame", nil, detailBox, "UIPanelScrollFrameTemplate")
+    d.scroll = scroll
     scroll:SetPoint("TOPLEFT", 6, -72)
     scroll:SetPoint("BOTTOMRIGHT", -28, 6)
     local content = CreateFrame("Frame", nil, scroll)
