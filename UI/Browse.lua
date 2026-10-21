@@ -71,7 +71,7 @@ local function BuildPopup()
         if ok then
             -- The request is stored either way: it is (re)sent whenever the crafter is online.
             if GH.IsOnline(popup.crafter) then
-                GH.msg("asked %s to craft it - see |cffffd100/gh requests|r.", GH.Short(popup.crafter))
+                GH.msg("asked %s to craft it - see |cffffd100/gh orders|r.", GH.Short(popup.crafter))
             else
                 GH.msg("%s is offline - your request will be delivered when they log in.", GH.Short(popup.crafter))
             end

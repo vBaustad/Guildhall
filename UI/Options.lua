@@ -26,7 +26,7 @@ local HELP = {
       .. "the minimap. Search for anything the guild can craft, has or wants, or browse by "
       .. "profession." },
     { "Asking for a craft",
-      "Send a craft request to anyone who can make it, even someone offline: it is delivered when "
+      "Send a craft order to anyone who can make it, even someone offline: it is delivered when "
       .. "they next log in. Offer spares under \"Guildies have it\" and post what you are after "
       .. "under \"Wanted\" - guildies who can make it are told." },
 }
@@ -53,7 +53,7 @@ local function Build(f, extraButton)
     sub:SetPoint("RIGHT", f, "RIGHT", -8, 0)
     sub:SetJustifyH("LEFT")
     sub:SetText("Your guild's crafting directory: who can make what, items guildies have, wanted posts and "
-        .. "craft requests. Open it with |cffffd100/gh|r.")
+        .. "craft orders. Open it with |cffffd100/gh|r.")
     last, lastX = sub, 8
 
     local function heading(text)
@@ -100,7 +100,7 @@ local function Build(f, extraButton)
 
     heading("Notifications")
     checkbox("Notify me when a guildie asks me to craft something",
-        "A chat line and a sound when a craft request arrives, including requests sent while you were offline.",
+        "A chat line and a sound when a craft order arrives, including orders sent while you were offline.",
         "notifyRequests")
     checkbox("Tell me when a guildie wants something I can craft",
         "A chat line when someone posts a wanted item that one of your recipes makes.", "notifyWanted")
@@ -180,7 +180,7 @@ local function Build(f, extraButton)
         end
     end
     listLine("Blocked players...", "Right-click a name in Browse or Requests to block someone. Their posts and "
-        .. "craft requests are hidden from you. Nothing is sent - they can't tell.",
+        .. "craft orders are hidden from you. Nothing is sent - they can't tell.",
         function()
             local out = {}
             for _, full in ipairs(GH.BlockedList()) do out[#out + 1] = { label = GH.Short(full), value = full } end

@@ -391,7 +391,9 @@ local function Build(f)
 
     c.mode = U.Segmented(comp, {
         { value = "offer", label = "Offer an item" },
-        { value = "want", label = "Want an item" },
+        -- "Ask the guild", because that is what posting a want does and it is the thing
+        -- that distinguishes it from a craft order aimed at one person.
+        { value = "want", label = "Ask the guild" },
     }, 250, function(v)
         composer.mode = v
         UpdateComposer()

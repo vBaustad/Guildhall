@@ -202,7 +202,7 @@ Sync.Handle("ORD", function(f, _, sender)
         if GH.Settings().notifyRequests then
             local roster = GH.roster[sender]
             local link = C.KeyLink(key) or C.KeyName(key) or "an item"
-            GH.msg("%s asks you to craft %s x%d. |cffffd100/gh requests|r", GH.ColorName(sender, roster and roster.class), link, o.qty)
+            GH.msg("%s asks you to craft %s x%d. |cffffd100/gh orders|r", GH.ColorName(sender, roster and roster.class), link, o.qty)
             PlaySound(SOUNDKIT and SOUNDKIT.TELL_MESSAGE or 3081)
         end
         Changed()

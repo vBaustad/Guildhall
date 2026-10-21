@@ -354,7 +354,7 @@ end
 function GH.SetBlocked(full, on)
     if not full or full == GH.Me() then return end
     GH.DB().blocked[full] = on and GH.Now() or nil
-    GH.msg(on and "blocked %s. Their posts and craft requests are hidden - they aren't told. Unblock in Settings."
+    GH.msg(on and "blocked %s. Their posts and craft orders are hidden - they aren't told. Unblock in Settings."
         or "unblocked %s.", GH.Short(full))
     GH.Fire("DATA_CHANGED")
     GH.Fire("ORDERS_CHANGED")
@@ -597,8 +597,8 @@ function GH.MyOtherNames()
         for key in pairs(g.members or {}) do note("stored profile", key) end
         for _, side in ipairs({ "incoming", "outgoing" }) do
             for _, o in pairs(g[side] or {}) do
-                note("craft request from", o.requester)
-                note("craft request to", o.crafter)
+                note("craft order from", o.requester)
+                note("craft order to", o.crafter)
             end
         end
     end
@@ -939,7 +939,9 @@ SlashCmdList.GUILDHALL = function(input)
         if GH.ShowSearch then GH.ShowSearch(rest) end
     elseif cmd == "mine" then
         if GH.ShowTab then GH.ShowTab("mine") end
-    elseif cmd == "requests" then
+    elseif cmd == "requests" or cmd == "orders" then
+        -- Both: the tab is called Craft orders now, and anybody who learned /gh requests should
+        -- not find it gone.
         if GH.ShowTab then GH.ShowTab("requests") end
     elseif cmd == "status" then
         if GH.PrintStatus then GH.PrintStatus() end
@@ -990,7 +992,7 @@ SlashCmdList.GUILDHALL = function(input)
         GH.debug = not GH.debug
         GH.msg("debug %s", GH.debug and "on" or "off")
     else
-        GH.msg("|cffffd100/gh|r window, |cffffd100/gh search <item>|r, |cffffd100/gh mine|r, |cffffd100/gh requests|r, |cffffd100/gh status|r, |cffffd100/gh sync|r, |cffffd100/gh config|r")
+        GH.msg("|cffffd100/gh|r window, |cffffd100/gh search <item>|r, |cffffd100/gh mine|r, |cffffd100/gh orders|r, |cffffd100/gh status|r, |cffffd100/gh sync|r, |cffffd100/gh config|r")
     end
 end
 

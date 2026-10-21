@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Asking the guild for something and asking one person to craft it now have different names.**
+  Both used to be called requests, and the tab holding only the second was called Requests, so the
+  other looked like it belonged there. Posting to the whole guild is "Ask the guild"; a job sent to
+  one crafter is a craft order, and that is what the tab is called. `/gh requests` still works.
+
 - **Browse tells you where you are, and the way back is an arrow.** The "< All professions" button
   in the top right is gone; there is a back arrow in the top left with the profession's name beside
   it, where the game's own journals put one. The profession icons sit at the right edge now so they

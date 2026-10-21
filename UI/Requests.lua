@@ -1,4 +1,4 @@
--- Guildhall - Requests tab: craft requests made to you, and the ones you've sent.
+-- Guildhall - Craft orders tab: craft requests made to you, and the ones you've sent.
 local ADDON, GH = ...
 local U, C, I, O = GH.UI, GH.Codec, GH.Index, GH.Orders
 
@@ -52,7 +52,7 @@ local function Refresh()
     if not view then return end
     if not GH.GuildDB() then
         view.list:SetData({})
-        view.empty:SetText("Craft requests work with your guild.\n\n|cff8a8a8aJoin a guild to ask guildies to "
+        view.empty:SetText("Craft orders work with your guild.\n\n|cff8a8a8aJoin a guild to ask guildies to "
             .. "craft for you, and to get their requests.|r")
         view.empty:Show()
         return
@@ -86,7 +86,7 @@ local function Build(f)
     view = f
     f.sides = U.Segmented(f, {
         { value = "incoming", label = "For you to craft" },
-        { value = "outgoing", label = "Your requests" },
+        { value = "outgoing", label = "Your orders" },
     }, 320, function(v)
         side = v
         Refresh()
@@ -203,4 +203,7 @@ local function Build(f)
     f.empty:SetWidth(420)
 end
 
-GH.RegisterTab("requests", "Requests", Build, Refresh)
+-- "Craft orders", not "Requests": a wanted post is a request too, and calling only this one
+-- by that name made the other look like it belonged here. The id stays - it is what
+-- /gh requests, GH.ShowTab and the minimap button all ask for.
+GH.RegisterTab("requests", "Craft orders", Build, Refresh)
