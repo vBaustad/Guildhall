@@ -988,9 +988,16 @@ SlashCmdList.GUILDHALL = function(input)
         end
     elseif cmd == "selftest" then
         if GH.SelfTest then GH.SelfTest() end
+    elseif cmd == "demo" then
+        if GH.Orders and GH.Orders.Demo then GH.Orders.Demo(rest) end
     elseif cmd == "debug" then
         GH.debug = not GH.debug
         GH.msg("debug %s", GH.debug and "on" or "off")
+        -- Only mentioned here: it is a prop for looking at an incoming offer alone, not a feature,
+        -- and it has no business in the help line everybody sees.
+        if GH.debug then
+            GH.msg("|cff888888/gh demo|r delivers yourself an offer, as though a guildie had sent one.")
+        end
     else
         GH.msg("|cffffd100/gh|r window, |cffffd100/gh search <item>|r, |cffffd100/gh mine|r, |cffffd100/gh orders|r, |cffffd100/gh status|r, |cffffd100/gh sync|r, |cffffd100/gh config|r")
     end

@@ -76,6 +76,12 @@ local function Dispatch(m)
 end
 
 function Sync.Send(header, body, dist, target, prio)
+    if Sync.loopback then
+        -- A loopback is a test, not a conversation: record what the handler wanted to answer
+        -- instead of whispering a name that nobody is logged in under.
+        Sync.loopback[#Sync.loopback + 1] = (header:match("^[^\t]*") or "?") .. " -> " .. tostring(target)
+        return
+    end
     if not IsInGuild() then return end
     local text = body and (header .. "\n" .. body) or header
     -- Whispers go to the name the server knows (no realm suffix on our own realm).
@@ -488,6 +494,22 @@ end
 
 -- Other modules (craft requests) add their own message kinds.
 function Sync.Handle(kind, fn) H[kind] = fn end
+
+-- Hand a message to the receive path as though it had arrived over the addon channel. Anything
+-- that needs two players - an offer, above all - cannot otherwise be tried out by one, and a
+-- handler nobody has ever run against real saved data is a handler nobody has tested. It enters
+-- at OnCommReceived, so every guard a real whisper passes applies here as well: the flood budget,
+-- the protocol check, the guildie test. Only the hop through the server is skipped, and that hop
+-- is what the python tests cover. Returns the replies the handler tried to send.
+function Sync.Loopback(header, body, sender)
+    Sync.loopback = {}
+    local ok, err = pcall(Sync.OnCommReceived, Sync, PREFIX,
+        body and (header .. "\n" .. body) or header, "WHISPER", sender)
+    local out = Sync.loopback
+    Sync.loopback = nil
+    if not ok then GH.dbg("loopback failed: %s", tostring(err)) end
+    return out
+end
 
 -- A sender gets a budget of messages per window; past that we stop reading them. Normal syncing is
 -- a handful of messages, so this only ever bites a flood.

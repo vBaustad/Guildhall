@@ -253,6 +253,66 @@ end
 Sync.Handle("ORD", function(f, _, sender) TakeOrder(f, sender, "craft") end)
 Sync.Handle("BID", function(f, _, sender) TakeOrder(f, sender, "buy", tonumber(f[7])) end)
 
+-- ---------------------------------------------------------------------------
+-- Debug: what an incoming offer looks like, without a second player
+-- ---------------------------------------------------------------------------
+-- The selftest proves the right record is stored. It cannot prove the row reads well, and a row
+-- nobody has seen drawn is a row nobody has checked. This delivers one offer to yourself through
+-- the real receive path and leaves it on screen to be looked at. It is a prop and not a sale: the
+-- sender does not exist, so accepting or declining it reaches nobody and no gold is involved.
+-- /gh demo clear takes it away again, and /gh debug has to be on, so it cannot be walked into.
+local DEMO = "Demo Buyer-Demo"
+
+function O.Demo(rest)
+    if not GH.debug then
+        GH.msg("that is a debug prop - turn debug on first with |cffffd100/gh debug|r.")
+        return
+    end
+    local g = Store()
+    if not g then
+        GH.msg("no guild data yet, so there is nowhere to put it.")
+        return
+    end
+    -- Always clear first: one demo row at a time, and no way to pile them up by repeating it.
+    local gone = 0
+    for oid in pairs(g.incoming) do
+        if oid:sub(1, #DEMO) == DEMO then
+            g.incoming[oid] = nil
+            gone = gone + 1
+        end
+    end
+    if (rest or ""):lower():find("clear") then
+        GH.msg(gone > 0 and ("removed %d demo order(s)."):format(gone)
+            or "there was no demo order to remove.")
+        Changed()
+        return
+    end
+    -- Something you have actually posted, because that is what an offer is for. Linen cloth if you
+    -- have posted nothing: every client can name it without asking the server.
+    local key, mine = 2589, false
+    for _, l in ipairs(GH.Listings.Publishable()) do
+        local id = C.ItemIdFromString(l.item)
+        if id then
+            key, mine = id, true
+            break
+        end
+    end
+    -- A guildie to ourselves for the length of one message, since a whisper from a stranger is
+    -- dropped before any handler sees it.
+    Sync.peers[DEMO] = { seen = GH.Now() }
+    Sync.Loopback(join("BID", PROTO, 990000, C.KeyToWire(key), 2, "demo - nobody really sent this",
+        12500), nil, DEMO)
+    Sync.peers[DEMO] = nil
+    if g.incoming[DEMO .. "#990000"] then
+        GH.msg("a demo offer for %s%s is now under \"Asked of you\" in |cffffd100/gh orders|r. "
+            .. "|cffffd100/gh demo clear|r removes it.",
+            C.KeyLink(key) or C.KeyName(key) or ("item " .. key),
+            mine and " - one you have posted" or "")
+    else
+        GH.msg("the offer was not accepted by the receive path - run |cffffd100/gh selftest|r.")
+    end
+end
+
 Sync.Handle("ACK", function(f, _, sender)
     local g = Store()
     local me = GH.Me()
