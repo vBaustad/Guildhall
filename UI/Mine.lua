@@ -23,14 +23,28 @@ local function UpdateComposer()
         c.itemInfo:SetText(offer and "|cff8a8a8aDrag an item here, or shift-click one in your bags.|r"
             or "|cff8a8a8aDrag or shift-click an item, or use \"I want this\" in Browse.|r")
     end
-    c.priceLabel:SetShown(not offer)
-    c.price:SetShown(not offer)
-    c.priceCoin:SetShown(not offer)
+    -- Both halves have a price. An offer without one is a thing you are giving away or
+    -- haggling over in whispers, which is fine - but "what do you want for it" was the first
+    -- question anybody was going to ask, and it was being answered in a free-text note or not
+    -- at all.
+    c.priceLabel:SetShown(true)
+    for _, w in ipairs(c.priceBoxes) do w:Show() end
     -- Your own bags are the only place an OFFER can come from, and almost never where a WANT
     -- comes from - you are asking for something you do not have. So the bag list belongs to one
     -- mode and a search belongs to the other.
     c.pick:SetShown(offer)
     c.find:SetShown(not offer)
+    -- Clear sits beside whichever of those two is up, and the item's name stops where the cluster
+    -- begins. Clear was anchored to the pick button's left edge full stop, so in the other mode it
+    -- sat under the search box - which is wider, and so reached further left than the thing Clear
+    -- was measuring against. Anchoring to "the control that is actually there" is the only version
+    -- of this that cannot drift when one of them changes size.
+    local side = offer and c.pick or c.find
+    c.clear:ClearAllPoints()
+    c.clear:SetPoint("RIGHT", side, "LEFT", -4, 0)
+    local edge = composer.key and c.clear or side
+    c.itemName:SetPoint("RIGHT", edge, "LEFT", -8, 0)
+    c.itemInfo:SetPoint("RIGHT", edge, "LEFT", -8, 0)
     c.post:SetText(offer and "List it" or "Post wanted")
     c.post:SetEnabled(composer.key ~= nil)
     c.clear:SetShown(composer.key ~= nil)
@@ -53,7 +67,9 @@ local function ClearComposer()
     if view then
         view.composer.note:SetText("")
         view.composer.count:SetText("")
-        view.composer.price:SetText("")
+        view.composer.priceG:SetText("")
+        view.composer.priceS:SetText("")
+        view.composer.priceC:SetText("")
     end
     UpdateComposer()
 end
@@ -518,14 +534,37 @@ local function Build(f)
     -- Wanted posts say what they pay; offers put their price in the note.
     c.priceLabel = U.Text(comp, "GameFontNormalSmall")
     c.priceLabel:SetPoint("LEFT", c.count, "RIGHT", 16, 0)
-    c.priceLabel:SetText("Gold each")
-    c.price = U.EditBox(comp, 52, nil, true)
-    c.price:SetPoint("LEFT", c.priceLabel, "RIGHT", 8, 0)
-    -- A bare number box invites "is that copper?". The coin answers it without a word.
-    c.priceCoin = U.Text(comp, "GameFontHighlightSmall")
-    c.priceCoin:SetText("|TInterface\\MoneyFrame\\UI-GoldIcon:12:12|t")
-    c.priceCoin:SetPoint("LEFT", c.price, "RIGHT", 3, 0)
-    U.Tooltip(c.price, "Gold each", "What you'll pay per item. Leave it empty to just ask for it.")
+    c.priceLabel:SetText("Price each")
+    -- Gold, silver and copper, not a single box multiplied by 10000. Most of what anybody posts
+    -- a want for is cloth or ore, and "1 gold each for linen" is not an offer, it is a typo
+    -- waiting to happen.
+    --
+    -- Built from three edit boxes rather than MoneyInputFrameTemplate: the money functions are in
+    -- the client's globals but I cannot see from a globals dump whether that XML template is, and
+    -- CreateFrame against a template that does not exist is an error on somebody's screen.
+    c.priceBoxes = {}
+    local function coinBox(after, gap, width, coin)
+        local box = U.EditBox(comp, width, nil, true)
+        box:SetPoint("LEFT", after, "RIGHT", gap, 0)
+        local icon = U.Text(comp, "GameFontHighlightSmall")
+        icon:SetText(("|TInterface\\MoneyFrame\\UI-%sIcon:12:12|t"):format(coin))
+        icon:SetPoint("LEFT", box, "RIGHT", 2, 0)
+        c.priceBoxes[#c.priceBoxes + 1] = box
+        c.priceBoxes[#c.priceBoxes + 1] = icon
+        return box, icon
+    end
+    local gIcon, sIcon
+    c.priceG, gIcon = coinBox(c.priceLabel, 8, 38, "Gold")
+    c.priceS, sIcon = coinBox(gIcon, 4, 26, "Silver")
+    c.priceC = coinBox(sIcon, 4, 26, "Copper")
+
+    --- What the three boxes add up to, in copper.
+    function c.PriceCopper()
+        return (c.priceG:GetNumber() or 0) * 10000 + (c.priceS:GetNumber() or 0) * 100
+            + (c.priceC:GetNumber() or 0)
+    end
+    U.Tooltip(c.priceLabel, "Price each",
+        "What you will pay per item, in gold, silver and copper. Leave it empty to just ask.")
 
     c.note = U.EditBox(comp, 260, "Add a note - trade terms, where to meet...")
     c.note:SetPoint("TOPLEFT", c.countLabel, "BOTTOMLEFT", 2, -10)
@@ -537,10 +576,10 @@ local function Build(f)
         if not composer.key then return end
         local ok, err
         if composer.mode == "offer" then
-            ok, err = L.Add(composer.link, c.count:GetNumber(), c.note:GetText())
+            ok, err = L.Add(composer.link, c.count:GetNumber(), c.note:GetText(), c.PriceCopper())
         else
             ok, err = L.AddWant(composer.key, c.note:GetText(), c.count:GetNumber(),
-                c.price:GetNumber() * 10000)
+                c.PriceCopper())
         end
         if ok then
             ClearComposer()

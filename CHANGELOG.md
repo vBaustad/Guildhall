@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **You can put a price on something you offer**, in gold, silver and copper rather than whole gold
+  - a leather is not worth a gold piece. Wanted posts take the same three boxes. Guildies on an
+  older Guildhall still see the offer; they just will not see the price.
+- **The "Crafts" filter is gone.** It showed almost exactly what "Everything" shows, because most
+  of what a guild knows is crafts. "Guildies have" and "Wanted" are the two that narrow anything.
+
 - **Asking the guild for something and asking one person to craft it now have different names.**
   Both used to be called requests, and the tab holding only the second was called Requests, so the
   other looked like it belonged there. Posting to the whole guild is "Ask the guild"; a job sent to

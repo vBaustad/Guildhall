@@ -12,7 +12,7 @@ local function TTL() return (GH.Settings().listingDays or 14) * 86400 end
 -- ---------------------------------------------------------------------------
 -- Listings
 -- ---------------------------------------------------------------------------
-function L.Add(link, count, note)
+function L.Add(link, count, note, price)
     local d = GH.MyData()
     if not d then return false end
     local item = C.ItemStringFromLink(link)
@@ -30,10 +30,12 @@ function L.Add(link, count, note)
     end
     count = math.max(1, math.min(tonumber(count) or have, have))
     note = C.Clean(note)
+    price = math.max(0, math.min(tonumber(price) or 0, 99999999))
 
     for _, l in ipairs(d.listings) do
         if l.item == item then
             l.count, l.note, l.posted, l.missing = count, note, GH.Now(), nil
+            l.price = price > 0 and price or nil
             GH.BumpRev("listings")
             return true
         end
@@ -41,7 +43,8 @@ function L.Add(link, count, note)
     if #d.listings >= C.MAX_LISTINGS then
         return false, ("You can have at most %d listings."):format(C.MAX_LISTINGS)
     end
-    table.insert(d.listings, { id = GH.NextId(), item = item, count = count, note = note, posted = GH.Now() })
+    table.insert(d.listings, { id = GH.NextId(), item = item, count = count, note = note,
+        posted = GH.Now(), price = price > 0 and price or nil })
     GH.BumpRev("listings")
     return true
 end

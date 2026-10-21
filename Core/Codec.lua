@@ -296,7 +296,7 @@ end
 -- Profile wire format (one record per line, tab separated):
 --   P  owner  rev  class  level
 --   F  skillLineID  rank  max  scanned36  recipes (comma separated base36 recipe spell IDs, or "-" for none)
---   L  id  itemString  count  posted36  note
+--   L  id  itemString  count  posted36  note  copperEach   (price appended later; may be missing)
 --   W  id  itemString  posted36  note  qty  copperEach   (qty/price appended later; may be missing)
 -- ---------------------------------------------------------------------------
 local function join(...) return table.concat({ ... }, "\t") end
@@ -325,7 +325,8 @@ function C.EncodeProfile(p, listings, wants)
     end
     for i, l in ipairs(listings or {}) do
         if i > C.MAX_LISTINGS then break end
-        lines[#lines + 1] = join("L", tostring(l.id), l.item, tostring(l.count or 1), C.To36(l.posted or 0), C.Clean(l.note))
+        lines[#lines + 1] = join("L", tostring(l.id), l.item, tostring(l.count or 1),
+            C.To36(l.posted or 0), C.Clean(l.note), tostring(l.price or 0))
     end
     for i, w in ipairs(wants or {}) do
         if i > C.MAX_WANTS then break end
@@ -382,12 +383,16 @@ function C.DecodeProfile(text)
                 end
                 p.profs[skillLine] = prof
             elseif kind == "L" then
+                -- price was added later: 6 fields from older clients, 7 from newer ones, the
+                -- same way qty and price arrived on W below.
                 local item = C.ItemStringFromLink(f[3])
-                if not (Int(f[2]) and item and Int(f[4]) and B36(f[5]) and #f == 6) then return nil end
+                if not (Int(f[2]) and item and Int(f[4]) and B36(f[5]) and (#f == 6 or #f == 7)) then return nil end
+                if #f == 7 and not Int(f[7]) then return nil end
                 if #p.listings >= C.MAX_LISTINGS then return nil end
                 p.listings[#p.listings + 1] = {
                     id = Int(f[2]), item = item, count = math.max(1, Int(f[4])),
                     posted = B36(f[5]), note = C.Clean(f[6]),
+                    price = math.max(0, math.min(Int(f[7]) or 0, 99999999)),
                 }
             elseif kind == "W" then
                 -- qty and price were added later: 5 fields from older clients, 7 from newer ones.

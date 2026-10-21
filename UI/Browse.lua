@@ -13,7 +13,10 @@ local DETAIL_ROW_H = 44
 -- The skill-or-quantity column in a detail row, measured from the buttons so it lines up down the
 -- list whatever the names beside it are doing.
 local META_COL_W = 96
-local FILTER_LABELS = { all = "Everything", crafts = "Crafts", listings = "Guildies have", wants = "Wanted" }
+-- No "Crafts": in any guild whose data is mostly crafts it was the same list as Everything -
+-- 221 against 220 in the user's own guild. Everything already contains them, and what earns
+-- a filter is the two SMALL sets: what somebody is holding, and what somebody is after.
+local FILTER_LABELS = { all = "Everything", listings = "Guildies have", wants = "Wanted" }
 local CARD_W, CARD_H, GRID_GAP, CHIP_W = 340, 64, 10, 120
 -- Cooking, First Aid and Fishing sit apart from the crafting professions.
 local SECONDARY = { Cooking = true, ["First Aid"] = true, Fishing = true }
@@ -403,8 +406,10 @@ local function RenderDetail()
             r.name:SetText(PersonLabel(l.owner, l.class))
             r.meta:SetText(("|cffffffffx%d|r  |cff8a8a8a%s%s|r"):format(l.l.count or 1,
                 l.stale and "last confirmed " or "", GH.Ago(l.l.posted)))
-            r.note:SetText(l.stale and "|cff8a8a8aold - ask before counting on it|r"
-                or (l.l.note ~= "" and l.l.note or "|cff6a6a6ano note|r"))
+            local asking = (l.l.price or 0) > 0
+                and ("|cffffd100" .. GH.Money(l.l.price) .. " each|r  ") or ""
+            r.note:SetText(asking .. (l.stale and "|cff8a8a8aold - ask before counting on it|r"
+                or (l.l.note ~= "" and l.l.note or (asking == "" and "|cff6a6a6ano note|r" or ""))))
             r.tip = { GH.LongName(l.owner), l.l.note ~= "" and l.l.note or nil }
             r.b1:SetShown(not isMe)
             r.b1:SetEnabled(GH.IsOnline(l.owner))
@@ -585,9 +590,8 @@ local function Refresh()
     end
     -- Counts per filter for the same search, so every filter shows what it holds.
     local all, loading = I.Search(state.query, { source = "all", prof = state.prof, online = state.online })
-    local counts = { all = #all, crafts = 0, listings = 0, wants = 0 }
+    local counts = { all = #all, listings = 0, wants = 0 }
     for _, r in ipairs(all) do
-        if #r.crafters > 0 then counts.crafts = counts.crafts + 1 end
         if #r.listings > 0 then counts.listings = counts.listings + 1 end
         if #r.wants > 0 then counts.wants = counts.wants + 1 end
     end
@@ -659,10 +663,9 @@ local function Build(f)
 
     local source = U.Segmented(f, {
         { value = "all", label = FILTER_LABELS.all, tip = "Everything the guild can craft, has to spare or is looking for." },
-        { value = "crafts", label = FILTER_LABELS.crafts, tip = "Items and enchants a guildie with Guildhall can craft." },
         { value = "listings", label = FILTER_LABELS.listings, tip = "Items guildies have posted as available, from their bags." },
         { value = "wants", label = FILTER_LABELS.wants, tip = "Items guildies are looking for." },
-    }, 420, function(v)
+    }, 340, function(v)
         state.source = v
         Refresh()
     end)
