@@ -179,6 +179,9 @@ local function RefreshProfessions()
     view.bagHead:ClearAllPoints()
     view.bagHead:SetPoint("TOPLEFT", 10, -52 - #needs * 30)
     view.bagHead:SetPoint("RIGHT", -10, 0)
+    -- Grow into the panel before filling it: how tall the list is depends on how many
+    -- professions needed a row above it, which is not known until here.
+    view.bagList:FitToHeight()
     view.bagList:SetData(BagRows())
 end
 
@@ -281,19 +284,27 @@ local function Build(f)
             row.hl = row:CreateTexture(nil, "HIGHLIGHT")
             row.hl:SetAllPoints()
             row.hl:SetColorTexture(1, 1, 1, 0.08)
-            -- Headings were the same weight as the items under them, so the groups did not read
-            -- as groups. A stripe behind them separates the list into the sections it already had.
-            row.headBg = row:CreateTexture(nil, "BACKGROUND")
-            row.headBg:SetAllPoints()
-            row.headBg:SetColorTexture(1, 0.82, 0.3, 0.09)
+            -- A heading in the game's own idiom: gold text with a divider running off to the
+            -- right, which is exactly what U.Heading draws everywhere else in this addon. It was
+            -- a filled stripe, and a flat modern bar under Blizzard's chunky collapse button was
+            -- two design languages arguing in the same twenty pixels. Its own font string,
+            -- anchored LEFT only, so it is as wide as its text and the line can start after it.
+            row.headText = U.Text(row, "GameFontNormalSmall")
+            row.headText:SetPoint("LEFT", 2, 0)
+            row.headLine = row:CreateTexture(nil, "ARTWORK")
+            row.headLine:SetAtlas("Options_HorizontalDivider")
+            row.headLine:SetHeight(1)
+            row.headLine:SetPoint("LEFT", row.headText, "RIGHT", 6, 0)
+            row.headLine:SetPoint("RIGHT", -6, 0)
             row:SetScript("OnEnter", function(self)
                 if not self.itemID then return end
                 GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
                 GameTooltip:SetItemByID(self.itemID)
                 GameTooltip:Show()
             end)
-            row.headBg:Hide()
             row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+            row.headText:Hide()
+            row.headLine:Hide()
             row:SetScript("OnClick", function(self)
                 if self.group then
                     local shut = BagCollapsed()
@@ -312,17 +323,20 @@ local function Build(f)
             if r.header then
                 row.itemID, row.group = nil, r.header
                 row.icon:SetTexture(nil)
-                row.headBg:Show()
+                row.name:SetText("")
+                row.count:SetText("")
                 -- The same collapse buttons Browse uses, for the same reason: they exist in every
                 -- client, and a bare "+" in front of a heading reads as a typo.
-                row.name:SetText(("|T%s:12|t |cffe6b34d%s|r |cff8a8a8a(%d)|r"):format(
+                row.headText:SetText(("|T%s:12|t |cffe6b34d%s|r |cff8a8a8a(%d)|r"):format(
                     r.collapsed and "Interface\\Buttons\\UI-PlusButton-Up"
                     or "Interface\\Buttons\\UI-MinusButton-Up", r.header, r.count))
-                row.count:SetText("")
+                row.headText:Show()
+                row.headLine:Show()
                 return
             end
             row.itemID, row.group = r.id, nil
-            row.headBg:Hide()
+            row.headText:Hide()
+            row.headLine:Hide()
             row.icon:SetTexture(C.KeyIcon(r.id))
             row.name:SetText(C.KeyColor(r.id) .. r.name .. "|r")
             row.count:SetText(r.count > 1 and ("|cff8a8a8ax%d|r"):format(r.count) or "")

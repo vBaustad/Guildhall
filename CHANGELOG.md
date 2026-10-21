@@ -11,8 +11,8 @@
   exactly what it is asking you to do.
 - Soulbound, bind-on-pickup and quest items are left out of the bag list. You cannot hand them to a
   guildie, so offering one was never going to work.
-- The groups in that list have clearer headings and fold away when you click them, and Guildhall
-  remembers which you closed.
+- The bag list fills the panel instead of stopping part way down it, and its group headings match
+  the rest of Guildhall: they fold away when you click them, and it remembers which you closed.
 - **My Guildhall shows what is in your bags**, in the space under your professions that was empty,
   grouped into materials, gear and consumables with the best things first. Click one to offer it or
   post it as wanted; shift-click links it in chat.

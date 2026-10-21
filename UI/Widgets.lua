@@ -300,26 +300,49 @@ function U.LinkButton(parent, text)
 end
 
 -- Fixed pool of rows inside a FauxScrollFrame. build(row) makes one; fill(row, data) paints it.
+--- numRows is how many rows to START with. A list anchored top and bottom is as tall as the box
+--- it is in, but it only ever drew this many - so a tall box showed a short list with a gap under
+--- it. Call list:FitToHeight() once it has been laid out and it builds what it needs.
 function U.ScrollList(parent, rowHeight, numRows, build, fill)
     local list = CreateFrame("Frame", nil, parent)
     local scroll = CreateFrame("ScrollFrame", nil, list, "FauxScrollFrameTemplate")
     scroll:SetPoint("TOPLEFT")
     scroll:SetPoint("BOTTOMRIGHT", -24, 0)
     list.rows = {}
-    for i = 1, numRows do
+    list.shown = numRows
+    local function MakeRow(i)
         local row = CreateFrame("Button", nil, list)
         row:SetHeight(rowHeight)
         row:SetPoint("TOPLEFT", 0, -(i - 1) * rowHeight)
         row:SetPoint("RIGHT", scroll, "RIGHT", 0, 0)
         build(row, i)
         list.rows[i] = row
+        return row
     end
+    for i = 1, numRows do MakeRow(i) end
     list.data = {}
+
+    --- Draw as many rows as fit, building any that do not exist yet. Rows past the end are hidden
+    --- rather than left to hang below the box: they are children of the list, not of the scroll
+    --- frame, so nothing would clip them.
+    function list:FitToHeight()
+        local h = self:GetHeight()
+        if not h or h < rowHeight then return end
+        local want = math.max(1, math.floor(h / rowHeight))
+        for i = 1, want do
+            if not self.rows[i] then MakeRow(i) end
+        end
+        for i = want + 1, #self.rows do self.rows[i]:Hide() end
+        self.shown = want
+        self:Refresh()
+    end
+
     function list:Refresh()
+        local rows = self.shown or numRows
         local offset = FauxScrollFrame_GetOffset(scroll)
-        FauxScrollFrame_Update(scroll, #self.data, numRows, rowHeight)
+        FauxScrollFrame_Update(scroll, #self.data, rows, rowHeight)
         for i, row in ipairs(self.rows) do
-            local item = self.data[i + offset]
+            local item = i <= rows and self.data[i + offset]
             if item then
                 row:Show()
                 fill(row, item, i + offset)
