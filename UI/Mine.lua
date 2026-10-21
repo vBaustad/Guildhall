@@ -77,6 +77,46 @@ end)
 -- ---------------------------------------------------------------------------
 -- Refresh
 -- ---------------------------------------------------------------------------
+-- Item classes, as the groups a player would sort their own bags into. The numbers are
+-- GetItemInfoInstant's classID, which is the only grouping the client gives us for free.
+local BAG_GROUPS = {
+    [7] = "Materials",      -- trade goods
+    [0] = "Consumables",
+    [2] = "Gear",           -- weapon
+    [4] = "Gear",           -- armour
+}
+local BAG_ORDER = { "Materials", "Gear", "Consumables", "Other" }
+
+-- Your bags as rows for the list: group headings, then the items under them, best first.
+local function BagRows()
+    local byGroup = {}
+    for _, it in ipairs(C.BagItems()) do
+        local name = I.Name(it.id)
+        if name then
+            local classID = select(6, GH.API.GetItemInfoInstant(it.id))
+            local group = BAG_GROUPS[classID] or "Other"
+            byGroup[group] = byGroup[group] or {}
+            table.insert(byGroup[group], { id = it.id, count = it.count, name = name,
+                quality = C.KeyQuality(it.id) or 1 })
+        end
+    end
+    local rows = {}
+    for _, group in ipairs(BAG_ORDER) do
+        local list = byGroup[group]
+        if list then
+            -- Best first inside a group: an epic you are offering is the thing you are looking
+            -- for, and twenty stacks of linen are not.
+            table.sort(list, function(a, b)
+                if a.quality ~= b.quality then return a.quality > b.quality end
+                return a.name < b.name
+            end)
+            rows[#rows + 1] = { header = group, count = #list }
+            for _, it in ipairs(list) do rows[#rows + 1] = it end
+        end
+    end
+    return rows
+end
+
 local function RefreshProfessions()
     local d = GH.MyData()
     local ids = {}
@@ -110,6 +150,13 @@ local function RefreshProfessions()
         end
     end
     view.noProfs:SetShown(#names == 0)
+
+    -- The bags start below whatever the professions took, which is however many you have.
+    local used = math.max(#names, 1)
+    view.bagHead:ClearAllPoints()
+    view.bagHead:SetPoint("TOPLEFT", 10, -40 - used * 30)
+    view.bagHead:SetPoint("RIGHT", -10, 0)
+    view.bagList:SetData(BagRows())
 end
 
 local function Refresh()
@@ -167,6 +214,56 @@ local function Build(f)
     f.noProfs:SetPoint("TOPLEFT", 12, -40)
     f.noProfs:SetText("No professions found yet.")
 
+    -- Your bags, in the bottom half of this panel - which was empty. The professions above it
+    -- stay: they carry the only live warning Guildhall has ("open your Enchanting window once"),
+    -- and there was no need to choose between them when half the panel was unused.
+    f.bagHead = U.Heading(left, "In your bags")
+    f.bagList = U.ScrollList(left, 20, 11,
+        function(row)
+            row.icon = row:CreateTexture(nil, "ARTWORK")
+            row.icon:SetSize(16, 16)
+            row.icon:SetPoint("LEFT", 2, 0)
+            row.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+            row.name = U.Text(row, "GameFontHighlightSmall")
+            row.name:SetPoint("LEFT", row.icon, "RIGHT", 6, 0)
+            row.count = U.Text(row, "GameFontDisableSmall", "RIGHT")
+            row.count:SetPoint("RIGHT", -4, 0)
+            row.name:SetPoint("RIGHT", row.count, "LEFT", -4, 0)
+            row.hl = row:CreateTexture(nil, "HIGHLIGHT")
+            row.hl:SetAllPoints()
+            row.hl:SetColorTexture(1, 1, 1, 0.08)
+            row:SetScript("OnEnter", function(self)
+                if not self.itemID then return end
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                GameTooltip:SetItemByID(self.itemID)
+                GameTooltip:Show()
+            end)
+            row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+            row:SetScript("OnClick", function(self)
+                if not self.itemID then return end
+                -- Shift-click links it, like an item anywhere else; a plain click loads it into
+                -- the form beside the list, which is what the list is for.
+                local link = C.KeyLink(self.itemID) or ("item:" .. self.itemID)
+                if IsModifiedClick() then HandleModifiedItemClick(link) else SetComposerItem(link) end
+            end)
+        end,
+        function(row, r)
+            if r.header then
+                row.itemID = nil
+                row.icon:SetTexture(nil)
+                row.name:SetText(("|cffe6b34d%s|r |cff8a8a8a(%d)|r"):format(r.header, r.count))
+                row.count:SetText("")
+                row.hl:SetAlpha(0)
+                return
+            end
+            row.itemID = r.id
+            row.hl:SetAlpha(1)
+            row.icon:SetTexture(C.KeyIcon(r.id))
+            row.name:SetText(C.KeyColor(r.id) .. r.name .. "|r")
+            row.count:SetText(r.count > 1 and ("|cff8a8a8ax%d|r"):format(r.count) or "")
+        end)
+    f.bagList:SetPoint("TOPLEFT", f.bagHead, "BOTTOMLEFT", 0, -4)
+
     local hint = left:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     hint:SetPoint("BOTTOMLEFT", 10, 10)
     hint:SetPoint("RIGHT", -10, 0)
@@ -174,6 +271,9 @@ local function Build(f)
     hint:SetText("Your professions and recipes are shared with the guild automatically, and updated whenever you learn something new.")
     f.guildNote = U.Text(left, "GameFontHighlightSmall")
     f.guildNote:SetPoint("BOTTOMLEFT", hint, "TOPLEFT", 0, 6)
+    f.bagHead:SetPoint("TOPLEFT", 10, -40)
+    f.bagHead:SetPoint("RIGHT", -10, 0)
+    f.bagList:SetPoint("BOTTOMRIGHT", f.guildNote, "TOPRIGHT", 0, 8)
 
     -- Right: composer
     local right = CreateFrame("Frame", nil, f)

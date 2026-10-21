@@ -6,6 +6,9 @@
   in the top right is gone; there is a back arrow in the top left with the profession's name beside
   it, where the game's own journals put one. The profession icons sit at the right edge now so they
   stop moving about, and the one you picked stands out properly.
+- **My Guildhall shows what is in your bags**, in the space under your professions that was empty,
+  grouped into materials, gear and consumables with the best things first. Click one to offer it or
+  post it as wanted; shift-click links it in chat.
 - **You can put an item into My Guildhall without opening your bags.** Offering something or
   posting a want needed you to drag the item onto the slot or shift-click it in your bags - with
   your bags shut there was no way in at all. There is a "Choose an item" button that lists what you
