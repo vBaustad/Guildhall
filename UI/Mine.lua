@@ -133,6 +133,7 @@ local function RefreshProfessions()
         if id then
             local p = d.profs[id]
             local name = GH.ProfName(id)
+            row.profID, row.profName = id, name
             row.icon:SetTexture(GH.ProfIcon(name))
             row.name:SetText(("|c%s%s|r  |cffffffff%d|r|cff8a8a8a/%d|r"):format(GH.CREAM, name, p.rank or 0, p.max or 0))
             if gathering[id] then
@@ -146,6 +147,7 @@ local function RefreshProfessions()
             end
             row:Show()
         else
+            row.profID, row.profName = nil, nil
             row:Hide()
         end
     end
@@ -195,7 +197,7 @@ local function Build(f)
 
     f.profRows = {}
     for i = 1, 8 do
-        local row = CreateFrame("Frame", nil, left)
+        local row = CreateFrame("Button", nil, left)
         row:SetHeight(30)
         row:SetPoint("TOPLEFT", 8, -32 - (i - 1) * 30)
         row:SetPoint("RIGHT", -8, 0)
@@ -208,6 +210,29 @@ local function Build(f)
         row.status = U.Text(row, "GameFontHighlightSmall")
         row.status:SetPoint("BOTTOMLEFT", row.icon, "BOTTOMRIGHT", 8, 0)
         row.status:SetPoint("RIGHT", 0, 0)
+        row.hl = row:CreateTexture(nil, "HIGHLIGHT")
+        row.hl:SetAllPoints()
+        row.hl:SetColorTexture(1, 1, 1, 0.06)
+        -- The one thing this panel ever asks of you is "open your Enchanting window once". Asking
+        -- is all it did; now the row that asks is the button that does it.
+        row:SetScript("OnClick", function(self)
+            if not self.profID then return end
+            -- No CastSpellByName fallback. OpenTradeSkill is present on Forever - checked in
+            -- the probe's own globals - and casting a profession by name is an Era-era trick I
+            -- have not seen work here. One path I have evidence for beats two where the second
+            -- is a guess that only runs on clients we do not ship to.
+            if C_TradeSkillUI and C_TradeSkillUI.OpenTradeSkill then
+                C_TradeSkillUI.OpenTradeSkill(self.profID)
+            end
+        end)
+        row:SetScript("OnEnter", function(self)
+            if not self.profName then return end
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:AddLine(self.profName, 1, 0.82, 0.3)
+            GameTooltip:AddLine("Click to open it.", 1, 1, 1)
+            GameTooltip:Show()
+        end)
+        row:SetScript("OnLeave", function() GameTooltip:Hide() end)
         f.profRows[i] = row
     end
     f.noProfs = U.Text(left, "GameFontDisableSmall")
@@ -273,7 +298,12 @@ local function Build(f)
     f.guildNote:SetPoint("BOTTOMLEFT", hint, "TOPLEFT", 0, 6)
     f.bagHead:SetPoint("TOPLEFT", 10, -40)
     f.bagHead:SetPoint("RIGHT", -10, 0)
-    f.bagList:SetPoint("BOTTOMRIGHT", f.guildNote, "TOPRIGHT", 0, 8)
+    -- Anchored to `hint`, which has a LEFT and a RIGHT point and therefore a real width, and NOT
+    -- to guildNote, which has only a BOTTOMLEFT and so is exactly as wide as whatever text it is
+    -- holding - nothing, most of the time. The list inherited that nothing: no width, so no room
+    -- for a name, and the counts rendered off the left edge of the panel. Third time this week I
+    -- have anchored a box to a piece of text and been given the text's width.
+    f.bagList:SetPoint("BOTTOMRIGHT", hint, "TOPRIGHT", 0, 26)
 
     -- Right: composer
     local right = CreateFrame("Frame", nil, f)

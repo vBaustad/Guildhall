@@ -6,6 +6,9 @@
   in the top right is gone; there is a back arrow in the top left with the profession's name beside
   it, where the game's own journals put one. The profession icons sit at the right edge now so they
   stop moving about, and the one you picked stands out properly.
+- Clicking one of your professions in My Guildhall opens it. The panel's only piece of advice is
+  "open your Enchanting window once to share recipes", and now the line that says so is the button
+  that does it.
 - **My Guildhall shows what is in your bags**, in the space under your professions that was empty,
   grouped into materials, gear and consumables with the best things first. Click one to offer it or
   post it as wanted; shift-click links it in chat.
