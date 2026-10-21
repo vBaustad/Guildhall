@@ -12,7 +12,12 @@
 --   OSY (either way)            every request between the two of us, so a side that lost its copy
 --                               gets it back; each status is only set by the side that owns it
 --
--- A request made while the crafter is offline waits and is delivered when they come online.
+-- An order made while the other side is offline WAITS IN YOUR OWN SAVED DATA and goes out the
+-- next time you are both online at once - TrySend refuses unless they are on, and O.Flush
+-- retries when they appear. No third party carries it: profiles are relayed through whoever
+-- is around, orders never are, because a relay means somebody who is not party to the order
+-- holding and forwarding it. So "they will get it when they log in" is only true if you are
+-- there too, and nothing in the UI may promise more than that.
 -- No gold or items move through the addon; you still trade or mail as usual.
 local ADDON, GH = ...
 local C = GH.Codec

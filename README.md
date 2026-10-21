@@ -24,8 +24,9 @@ professions and recipes of every guildie who has it installed.
 - **Guildies have it.** Offer a spare BoE or anything else from your bags, with a note. A listing disappears
   when the item leaves your bags, and it expires after a set number of days that you choose.
 - **Wanted.** Post what you're looking for. Guildies who can craft it get a quiet heads-up.
-- **Craft requests.** Ask a crafter for an item and add an optional note. If they're offline, the request is
-  delivered when they log in. The crafter can accept, decline or mark it done, and sees the materials and how
+- **Orders.** Ask a crafter for an item, or offer to buy a spare a guildie has posted, with an optional note
+  and a price. If they're offline the order waits with you and is sent the next time you're both online - no
+  one else carries it for you. The crafter can accept, decline or mark it done, and sees the materials and how
   many they already have.
 
 Guildhall never moves gold or items. Once you've agreed, trade or use the mail as usual.

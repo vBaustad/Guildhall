@@ -107,7 +107,10 @@ local function BuildPopup()
             if GH.IsOnline(popup.crafter) then
                 GH.msg(verb .. " - see |cffffd100/gh orders|r.", GH.Short(popup.crafter))
             else
-                GH.msg("%s is offline - it will be delivered when they log in.", GH.Short(popup.crafter))
+                -- Precisely what happens: it is kept here and sent when you are both on.
+                -- Saying "delivered when they log in" promised a postbox we do not have.
+                GH.msg("%s is offline - this is saved and sent the next time you are both online.",
+                    GH.Short(popup.crafter))
             end
             popup:Hide()
         else

@@ -4,9 +4,15 @@
 
 - **You can offer to buy something a guildie has posted.** Before, the only thing you could do with
   a spare somebody listed was whisper them or tell the whole guild you wanted one. There is an
-  Offer button on their row now: name a price, and it reaches them even if they are offline, the
-  same way a craft order does. Offers and craft orders share one tab, now called **Orders**, with
-  what people have asked of you on one side and what you have asked of them on the other.
+  Offer button on their row now: name a price, and it is sent the same way a craft order is.
+  Offers and craft orders share one tab, now called **Orders**, with what people have asked of you
+  on one side and what you have asked of them on the other.
+- **What "sent while they are offline" actually means**, because earlier releases put it too
+  strongly. An order you make while the other side is offline is kept in your own saved data and
+  goes out the next time the two of you are online together. No other guildie carries it for you -
+  recipes and skill levels are passed around the guild, orders never are, since that would mean
+  somebody with no part in the order holding it. You will not miss one by logging off: it waits.
+  But it needs you both there once, so the help text and the message in Browse now say so.
 - Guildies on an older Guildhall will not receive offers at all - they will not see them mislabelled
   as something else.
 

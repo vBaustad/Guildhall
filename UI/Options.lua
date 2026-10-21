@@ -26,9 +26,10 @@ local HELP = {
       .. "the minimap. Search for anything the guild can craft, has or wants, or browse by "
       .. "profession." },
     { "Asking for a craft",
-      "Send a craft order to anyone who can make it, even someone offline: it is delivered when "
-      .. "they next log in. Offer spares under \"Guildies have it\" and post what you are after "
-      .. "under \"Wanted\" - guildies who can make it are told." },
+      "Send a craft order to anyone who can make it, or offer to buy something a guildie has "
+      .. "posted. If they are offline it is kept and sent the next time you are both online - "
+      .. "nobody else carries it for you. Offer spares under \"Guildies have it\" and post what "
+      .. "you are after under \"Wanted\" - guildies who can make it are told." },
 }
 
 local function Build(f, extraButton)
