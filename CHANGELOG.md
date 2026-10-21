@@ -1,6 +1,6 @@
 # Guildhall
 
-## Unreleased
+## 0.2.0-beta11
 
 - **You can offer to buy something a guildie has posted.** Before, the only thing you could do with
   a spare somebody listed was whisper them or tell the whole guild you wanted one. There is an

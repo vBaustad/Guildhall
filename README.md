@@ -45,7 +45,7 @@ Guildhall never moves gold or items. Once you've agreed, trade or use the mail a
 | `/gh` | Open or close Guildhall |
 | `/gh search <item>` | Search the guild for an item |
 | `/gh mine` | Your professions, listings and wanted posts |
-| `/gh requests` | Craft requests sent to you and by you |
+| `/gh orders` | Craft orders and offers to buy, sent to you and by you (`/gh requests` still works) |
 | `/gh status` | Sync status |
 | `/gh config` | Settings |
 
