@@ -59,7 +59,9 @@ function GH.StartWant(key)
     composer.key = key
     composer.link = select(2, GH.API.GetItemInfo(key)) or ("item:" .. key)
     UpdateComposer()
-    view.composer.note:SetFocus()
+    -- Deliberately NOT focusing the note: its placeholder is the only label it has, and
+    -- focus hides the placeholder. Arriving here from "I want this" the item is already
+    -- filled in and the next thing most people do is press the button.
 end
 
 -- Shift-clicking an item in your bags while this tab is open picks it (unless you're typing in chat).
@@ -207,10 +209,17 @@ local function Build(f)
 
     c.slot = U.KeyIcon(comp, 38)
     c.slot:SetPoint("TOPLEFT", 10, -42)
-    local border = c.slot:CreateTexture(nil, "OVERLAY")
-    border:SetTexture("Interface\\Buttons\\UI-Quickslot2")
-    border:SetPoint("TOPLEFT", -12, 12)
-    border:SetPoint("BOTTOMRIGHT", 12, -12)
+    -- A plain hairline, the same as the profession icons in Browse. This was UI-Quickslot2,
+    -- the action-bar slot art, stretched 12 pixels past the icon on every side: that texture
+    -- is mostly transparent padding around a ring drawn for a 36-pixel button, so at this
+    -- size the ring landed inside the icon and the icon spilled out through it.
+    -- Drawn rather than set as a backdrop: U.KeyIcon is a plain Button with no
+    -- BackdropTemplate, so SetBackdrop is not a method on it. Guarding on "if it has one"
+    -- would have left no border at all and looked like a styling choice.
+    local frame = c.slot:CreateTexture(nil, "BACKGROUND")
+    frame:SetPoint("TOPLEFT", -2, 2)
+    frame:SetPoint("BOTTOMRIGHT", 2, -2)
+    frame:SetColorTexture(0.45, 0.4, 0.35, 1)
     c.slot:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     local function takeCursor()
         local kind, _, link = GetCursorInfo()
@@ -249,9 +258,13 @@ local function Build(f)
     c.priceLabel:SetText("Gold each")
     c.price = U.EditBox(comp, 52, nil, true)
     c.price:SetPoint("LEFT", c.priceLabel, "RIGHT", 8, 0)
+    -- A bare number box invites "is that copper?". The coin answers it without a word.
+    c.priceCoin = U.Text(comp, "GameFontHighlightSmall")
+    c.priceCoin:SetText("|TInterface\\MoneyFrame\\UI-GoldIcon:12:12|t")
+    c.priceCoin:SetPoint("LEFT", c.price, "RIGHT", 3, 0)
     U.Tooltip(c.price, "Gold each", "What you'll pay per item. Leave it empty to just ask for it.")
 
-    c.note = U.EditBox(comp, 260, "Note - trade terms, where to meet...")
+    c.note = U.EditBox(comp, 260, "Add a note - trade terms, where to meet...")
     c.note:SetPoint("TOPLEFT", c.countLabel, "BOTTOMLEFT", 2, -10)
     c.note:SetMaxLetters(C.NOTE_LEN)
 
