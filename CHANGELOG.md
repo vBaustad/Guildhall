@@ -6,6 +6,12 @@
   in the top right is gone; there is a back arrow in the top left with the profession's name beside
   it, where the game's own journals put one. The profession icons sit at the right edge now so they
   stop moving about, and the one you picked stands out properly.
+- **You can put an item into My Guildhall without opening your bags.** Offering something or
+  posting a want needed you to drag the item onto the slot or shift-click it in your bags - with
+  your bags shut there was no way in at all. There is a "Choose an item" button that lists what you
+  are carrying, and a Clear button to empty the form.
+- Items only you can make are dimmed in Browse rather than standing out in green. They are still
+  listed - hiding them would make something you can make yourself look like something nobody can.
 - **Materials are items you can hover and link.** The list of reagents under an item used to be
   one line of text that ran off the edge - you could not see the last one, let alone what it was.
   Each material is its own entry now, wrapping onto as many lines as it needs, with the game's own

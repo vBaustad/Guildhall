@@ -27,6 +27,7 @@ local function UpdateComposer()
     c.price:SetShown(not offer)
     c.post:SetText(offer and "List it" or "Post wanted")
     c.post:SetEnabled(composer.key ~= nil)
+    c.clear:SetShown(composer.key ~= nil)
 end
 
 local function SetComposerItem(link)
@@ -245,6 +246,45 @@ local function Build(f)
     c.itemInfo = U.Text(comp, "GameFontHighlightSmall")
     c.itemInfo:SetPoint("TOPLEFT", c.itemName, "BOTTOMLEFT", 0, -4)
     c.itemInfo:SetPoint("RIGHT", -10, 0)
+
+    -- A way IN. Dragging onto the slot and shift-clicking both need your bags open, so with them
+    -- shut there was no way to put an item in this form at all - which made the whole tab
+    -- something you could only reach from somewhere else.
+    c.pick = U.Button(comp, "Choose an item", 110, 20)
+    c.pick:SetPoint("TOPRIGHT", -10, -42)
+    c.pick:SetScript("OnClick", function(self)
+        if not (MenuUtil and MenuUtil.CreateContextMenu) then
+            GH.msg("drag an item onto the slot, or shift-click one in your bags.")
+            return
+        end
+        local bags = C.BagItems()
+        if #bags == 0 then
+            GH.msg("your bags are empty.")
+            return
+        end
+        MenuUtil.CreateContextMenu(self, function(_, root)
+            root:CreateTitle("From your bags")
+            for _, it in ipairs(bags) do
+                local name = I.Name(it.id)
+                if name then
+                    local label = ("|T%s:14|t %s%s|r%s"):format(C.KeyIcon(it.id), C.KeyColor(it.id),
+                        name, it.count > 1 and (" |cff8a8a8ax" .. it.count .. "|r") or "")
+                    root:CreateButton(label, function()
+                        SetComposerItem(C.KeyLink(it.id) or ("item:" .. it.id))
+                    end)
+                end
+            end
+        end)
+    end)
+    U.Tooltip(c.pick, "Choose an item",
+        "Pick something out of your bags. You can also drag one onto the slot, or shift-click "
+        .. "one in your bags.")
+
+    -- And a way OUT. Right-clicking the slot cleared it, which nothing said and nobody found.
+    c.clear = U.Button(comp, "Clear", 54, 20)
+    c.clear:SetPoint("RIGHT", c.pick, "LEFT", -4, 0)
+    c.clear:SetScript("OnClick", ClearComposer)
+    U.Tooltip(c.clear, "Clear", "Empty the form and start again.")
 
     c.countLabel = U.Text(comp, "GameFontNormalSmall")
     c.countLabel:SetPoint("TOPLEFT", 12, -92)

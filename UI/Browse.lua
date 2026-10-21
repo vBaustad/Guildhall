@@ -1030,7 +1030,12 @@ local function Build(f)
                 else
                     who = GH.Count(#r.crafters, "crafter")
                 end
-                parts[#parts + 1] = (on > 0 and "|cff60d060" or "|cff8a8a8a") .. who .. "|r"
+                -- Your own crafts stay in the list - hiding them would make an item you can make
+                -- yourself look like one nobody can - but they are dimmed, because every other
+                -- entry here is something to go and ask somebody for and this one is not.
+                local mineOnly = #r.crafters == 1 and (I.Source(r.crafters[1]) or {}).owner == GH.Me()
+                parts[#parts + 1] = (mineOnly and "|cff6a6a6a" or on > 0 and "|cff60d060"
+                    or "|cff8a8a8a") .. who .. "|r"
             end
             if #r.listings > 0 then
                 parts[#parts + 1] = ("|cffe6b34d%d %s one|r"):format(#r.listings, #r.listings == 1 and "has" or "have")

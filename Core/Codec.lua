@@ -45,6 +45,30 @@ function C.FindInBags(id)
     end
 end
 
+--- Every distinct item in your bags, as { id, count }, most of it first. The composer needs
+--- this because "drag it onto the slot" is only a way in if your bags are already open - with
+--- them shut there was no way to offer anything at all.
+function C.BagItems()
+    if not (C_Container and C_Container.GetContainerNumSlots) then return {} end
+    local seen, out = {}, {}
+    for bag = 0, (NUM_BAG_SLOTS or 4) do
+        for slot = 1, (C_Container.GetContainerNumSlots(bag) or 0) do
+            local info = C_Container.GetContainerItemInfo(bag, slot)
+            local id = info and info.itemID
+            if id then
+                local at = seen[id]
+                if at then
+                    out[at].count = out[at].count + (info.stackCount or 1)
+                else
+                    out[#out + 1] = { id = id, count = info.stackCount or 1 }
+                    seen[id] = #out
+                end
+            end
+        end
+    end
+    return out
+end
+
 -- Is the copy in your bags soulbound? Uses the item's own tooltip, which is the only place a
 -- bind-on-equip item that has been worn says so.
 function C.IsBoundInBags(id)
