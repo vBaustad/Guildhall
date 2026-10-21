@@ -161,10 +161,17 @@ local function Build(f)
             -- Every line is bounded on the right by the buttons, so none of them can run underneath
             -- one and come back out the other side.
             row.lines = { row.line2, row.line3, row.line4 }
+            -- What the offer comes to, over the button that accepts it. One point, so it sizes to
+            -- its text and grows left from the right edge - it cannot reach the lines, which all
+            -- stop short of the buttons.
+            row.total = U.Text(row, "GameFontNormal")
+            row.total:SetPoint("BOTTOMRIGHT", row.b1, "TOPRIGHT", 0, 3)
         end,
         function(row, o, index)
             row.bg:SetShown(index % 2 == 0)
             row.owner = nil
+            -- Rows are reused, so last row's money must not sit over this row's Accept.
+            row.total:SetText("")
             if o.heading then
                 row.icon:Hide()
                 row.title:SetText("|cffe6b34d" .. o.heading .. "|r")
@@ -219,6 +226,14 @@ local function Build(f)
                     GH.Ago(o.created), status),
                 note,
                 MaterialsText(o))
+            -- The number the decision is actually made on. For a single item "each" already is the
+            -- total, so it says the price plainly rather than the same figure labelled twice.
+            if o.kind == "buy" and (o.price or 0) > 0 then
+                local qty = o.qty or 1
+                row.total:SetText(qty > 1
+                    and ("|cffffd100%s|r |cff8a8a8atotal|r"):format(GH.Money(o.price * qty))
+                    or ("|cffffd100%s|r"):format(GH.Money(o.price)))
+            end
 
             local finished = O.FINISHED[o.status]
             local whisper = GH.IsOnline(other) and function() U.Whisper(other, o.item) end or nil

@@ -23,7 +23,9 @@
 
 - **You can put a price on something you offer**, in gold, silver and copper rather than whole gold
   - a leather is not worth a gold piece. Wanted posts take the same three boxes. Guildies on an
-  older Guildhall still see the offer; they just will not see the price.
+  older Guildhall still see the offer; they just will not see the price. An order you have been
+  sent shows what it comes to in total, above the Accept button, so the figure you decide on is not
+  one you have to work out yourself.
 - **The "Crafts" filter is gone.** It showed almost exactly what "Everything" shows, because most
   of what a guild knows is crafts. "Guildies have" and "Wanted" are the two that narrow anything.
 
