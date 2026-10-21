@@ -6,9 +6,13 @@
   in the top right is gone; there is a back arrow in the top left with the profession's name beside
   it, where the game's own journals put one. The profession icons sit at the right edge now so they
   stop moving about, and the one you picked stands out properly.
-- Clicking one of your professions in My Guildhall opens it. The panel's only piece of advice is
-  "open your Enchanting window once to share recipes", and now the line that says so is the button
-  that does it.
+- **Your professions in My Guildhall are one line now**, saying how much is shared, with a row only
+  for a profession whose recipes Guildhall cannot see yet - and clicking that row opens it, which is
+  exactly what it is asking you to do.
+- Soulbound, bind-on-pickup and quest items are left out of the bag list. You cannot hand them to a
+  guildie, so offering one was never going to work.
+- The groups in that list have clearer headings and fold away when you click them, and Guildhall
+  remembers which you closed.
 - **My Guildhall shows what is in your bags**, in the space under your professions that was empty,
   grouped into materials, gear and consumables with the best things first. Click one to offer it or
   post it as wanted; shift-click links it in chat.

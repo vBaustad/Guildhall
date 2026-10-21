@@ -87,6 +87,12 @@ local BAG_GROUPS = {
 }
 local BAG_ORDER = { "Materials", "Gear", "Consumables", "Other" }
 
+local function BagCollapsed()
+    local st = GH.Settings()
+    st.bagGroups = st.bagGroups or {}
+    return st.bagGroups
+end
+
 -- Your bags as rows for the list: group headings, then the items under them, best first.
 local function BagRows()
     local byGroup = {}
@@ -110,8 +116,11 @@ local function BagRows()
                 if a.quality ~= b.quality then return a.quality > b.quality end
                 return a.name < b.name
             end)
-            rows[#rows + 1] = { header = group, count = #list }
-            for _, it in ipairs(list) do rows[#rows + 1] = it end
+            local shut = BagCollapsed()[group]
+            rows[#rows + 1] = { header = group, count = #list, collapsed = shut }
+            if not shut then
+                for _, it in ipairs(list) do rows[#rows + 1] = it end
+            end
         end
     end
     return rows
@@ -128,35 +137,47 @@ local function RefreshProfessions()
         return GH.ProfName(a) < GH.ProfName(b)
     end)
     local names = ids
+    -- One line saying it is working, and a row ONLY where something needs doing. Five static
+    -- rows of skill numbers told you nothing you could not read in the game's own UI, and making
+    -- them clickable just meant a profession window landed on top of Guildhall when you brushed
+    -- one. What is worth a row is the profession whose recipes we cannot see.
+    local recipes, needs = 0, {}
+    for _, id in ipairs(ids) do
+        local p = d.profs[id]
+        if not gathering[id] then
+            if GH.Scan.HasStaticRecipes(id) or p.recipes then
+                recipes = recipes + GH.Scan.CountSet(p.recipes)
+            else
+                needs[#needs + 1] = id
+            end
+        end
+    end
+    if #ids == 0 then
+        view.profSummary:SetText("")
+    else
+        view.profSummary:SetText(("|cff60d060%s and %s shared with your guild|r"):format(
+            GH.Count(#ids, "profession"), GH.Count(recipes, "recipe")))
+    end
+
     for i, row in ipairs(view.profRows) do
-        local id = ids[i]
+        local id = needs[i]
         if id then
-            local p = d.profs[id]
             local name = GH.ProfName(id)
             row.profID, row.profName = id, name
             row.icon:SetTexture(GH.ProfIcon(name))
-            row.name:SetText(("|c%s%s|r  |cffffffff%d|r|cff8a8a8a/%d|r"):format(GH.CREAM, name, p.rank or 0, p.max or 0))
-            if gathering[id] then
-                row.status:SetText("|cff8a8a8agathering - skill shared|r")
-            elseif GH.Scan.HasStaticRecipes(id) or p.recipes then
-                row.status:SetText(("|cff60d060%s shared|r"):format(
-                    GH.Count(GH.Scan.CountSet(p.recipes), "recipe")))
-            else
-                -- No built-in data for this profession: only its window can tell which recipes you know.
-                row.status:SetText("|cffffb040open your " .. name .. " window once to share recipes|r")
-            end
+            row.name:SetText(("|c%s%s|r"):format(GH.CREAM, name))
+            row.status:SetText("|cffffb040open its window once to share recipes|r")
             row:Show()
         else
             row.profID, row.profName = nil, nil
             row:Hide()
         end
     end
-    view.noProfs:SetShown(#names == 0)
+    view.noProfs:SetShown(#ids == 0)
 
-    -- The bags start below whatever the professions took, which is however many you have.
-    local used = math.max(#names, 1)
+    -- The bags start below the summary and whatever needed saying, which is usually nothing.
     view.bagHead:ClearAllPoints()
-    view.bagHead:SetPoint("TOPLEFT", 10, -40 - used * 30)
+    view.bagHead:SetPoint("TOPLEFT", 10, -52 - #needs * 30)
     view.bagHead:SetPoint("RIGHT", -10, 0)
     view.bagList:SetData(BagRows())
 end
@@ -199,7 +220,7 @@ local function Build(f)
     for i = 1, 8 do
         local row = CreateFrame("Button", nil, left)
         row:SetHeight(30)
-        row:SetPoint("TOPLEFT", 8, -32 - (i - 1) * 30)
+        row:SetPoint("TOPLEFT", 8, -50 - (i - 1) * 30)
         row:SetPoint("RIGHT", -8, 0)
         row.icon = row:CreateTexture(nil, "ARTWORK")
         row.icon:SetSize(24, 24)
@@ -235,6 +256,9 @@ local function Build(f)
         row:SetScript("OnLeave", function() GameTooltip:Hide() end)
         f.profRows[i] = row
     end
+    f.profSummary = U.Text(left, "GameFontHighlightSmall")
+    f.profSummary:SetPoint("TOPLEFT", 12, -34)
+    f.profSummary:SetPoint("RIGHT", -10, 0)
     f.noProfs = U.Text(left, "GameFontDisableSmall")
     f.noProfs:SetPoint("TOPLEFT", 12, -40)
     f.noProfs:SetText("No professions found yet.")
@@ -257,14 +281,26 @@ local function Build(f)
             row.hl = row:CreateTexture(nil, "HIGHLIGHT")
             row.hl:SetAllPoints()
             row.hl:SetColorTexture(1, 1, 1, 0.08)
+            -- Headings were the same weight as the items under them, so the groups did not read
+            -- as groups. A stripe behind them separates the list into the sections it already had.
+            row.headBg = row:CreateTexture(nil, "BACKGROUND")
+            row.headBg:SetAllPoints()
+            row.headBg:SetColorTexture(1, 0.82, 0.3, 0.09)
             row:SetScript("OnEnter", function(self)
                 if not self.itemID then return end
                 GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
                 GameTooltip:SetItemByID(self.itemID)
                 GameTooltip:Show()
             end)
+            row.headBg:Hide()
             row:SetScript("OnLeave", function() GameTooltip:Hide() end)
             row:SetScript("OnClick", function(self)
+                if self.group then
+                    local shut = BagCollapsed()
+                    shut[self.group] = not shut[self.group] or nil
+                    Refresh()
+                    return
+                end
                 if not self.itemID then return end
                 -- Shift-click links it, like an item anywhere else; a plain click loads it into
                 -- the form beside the list, which is what the list is for.
@@ -274,15 +310,19 @@ local function Build(f)
         end,
         function(row, r)
             if r.header then
-                row.itemID = nil
+                row.itemID, row.group = nil, r.header
                 row.icon:SetTexture(nil)
-                row.name:SetText(("|cffe6b34d%s|r |cff8a8a8a(%d)|r"):format(r.header, r.count))
+                row.headBg:Show()
+                -- The same collapse buttons Browse uses, for the same reason: they exist in every
+                -- client, and a bare "+" in front of a heading reads as a typo.
+                row.name:SetText(("|T%s:12|t |cffe6b34d%s|r |cff8a8a8a(%d)|r"):format(
+                    r.collapsed and "Interface\\Buttons\\UI-PlusButton-Up"
+                    or "Interface\\Buttons\\UI-MinusButton-Up", r.header, r.count))
                 row.count:SetText("")
-                row.hl:SetAlpha(0)
                 return
             end
-            row.itemID = r.id
-            row.hl:SetAlpha(1)
+            row.itemID, row.group = r.id, nil
+            row.headBg:Hide()
             row.icon:SetTexture(C.KeyIcon(r.id))
             row.name:SetText(C.KeyColor(r.id) .. r.name .. "|r")
             row.count:SetText(r.count > 1 and ("|cff8a8a8ax%d|r"):format(r.count) or "")

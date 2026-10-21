@@ -55,6 +55,11 @@ function C.BagItems()
         for slot = 1, (C_Container.GetContainerNumSlots(bag) or 0) do
             local info = C_Container.GetContainerItemInfo(bag, slot)
             local id = info and info.itemID
+            -- Soulbound, bind-on-pickup and quest items can never reach a guildie, so they have no
+            -- business in a list whose whole purpose is picking something to offer. isBound comes
+            -- straight off the slot we are already looking at.
+            if id and info.isBound then id = nil end
+            if id and C.UntradableType(id) then id = nil end
             if id then
                 local at = seen[id]
                 if at then
