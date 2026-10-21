@@ -10,9 +10,9 @@ local LIST_ROWS, LIST_ROW_H = 15, 22
 -- truncated at their left edge - "offline - requests wait until they log in (fro...". The buttons
 -- now take the top line beside the name and the note has the whole width underneath.
 local DETAIL_ROW_H = 44
--- The name column in a detail row. The row is about 410 wide: two 62pt buttons and the skill or
--- quantity beside the name need the rest, which leaves this much for the name itself.
-local NAME_COL_W = 170
+-- The skill-or-quantity column in a detail row, measured from the buttons so it lines up down the
+-- list whatever the names beside it are doing.
+local META_COL_W = 96
 local FILTER_LABELS = { all = "Everything", crafts = "Crafts", listings = "Guildies have", wants = "Wanted" }
 local CARD_W, CARD_H, GRID_GAP, CHIP_W = 340, 64, 10, 120
 -- Cooking, First Aid and Fishing sit apart from the crafting professions.
@@ -115,19 +115,21 @@ local function MakeDetailRow(parent)
     r.bg:SetColorTexture(1, 1, 1, 0.03)
     r.name = U.Text(r, "GameFontHighlight")
     r.name:SetPoint("TOPLEFT", 6, -4)
-    -- A fixed column, because a Forever name is two words: "Duplo Bonk" and "Bartholomew
-    -- Winterbottom" have to start the skill and the quantity in the same place, and a name too long
-    -- for the column is cut with an ellipsis instead of pushing them under the buttons. The row's
-    -- tooltip carries the whole name, so nothing is lost by the cut.
-    r.name:SetWidth(NAME_COL_W)
     r.meta = U.Text(r, "GameFontHighlightSmall")
-    r.meta:SetPoint("LEFT", r.name, "RIGHT", 8, 0)
     r.note = U.Text(r, "GameFontDisableSmall")
     r.note:SetPoint("TOPLEFT", 6, -25)
     r.b1 = U.Button(r, "Whisper", 62, 18)
     r.b1:SetPoint("TOPRIGHT", -4, -4)
     r.b2 = U.Button(r, "Request", 62, 18)
     r.b2:SetPoint("TOPRIGHT", r.b1, "TOPLEFT", -3, 0)
+    -- The skill and the quantity line up because THEY have a fixed column against the buttons,
+    -- not because the name does. A fixed name column aligned them too, but it spent its full
+    -- width on "Lorr Den" and left the skill with nothing - which is how "skill 156" became "...".
+    -- The name takes whatever is left over and is only cut when it is genuinely too long; the
+    -- row's tooltip carries it in full either way.
+    r.meta:SetPoint("TOPRIGHT", r.b2, "TOPLEFT", -8, -2)
+    r.meta:SetWidth(META_COL_W)
+    r.name:SetPoint("RIGHT", r.meta, "LEFT", -8, 0)
     r.note:SetPoint("RIGHT", r, "RIGHT", -6, 0)
     -- The skill line needs the same right edge as the note below it. Without one it has only a
     -- LEFT anchor, so it grows rightwards for ever and prints straight through the buttons -
@@ -306,9 +308,16 @@ local function RenderDetail()
     -- simply printed over them.
     d.matsLabel:ClearAllPoints()
     d.matsLabel:SetPoint("TOPLEFT", d.sub, "BOTTOMLEFT", 0, -8)
-    d.scroll:ClearAllPoints()
-    d.scroll:SetPoint("TOPLEFT", d.matsLabel, "BOTTOMLEFT", -4, -(matsBottom))
-    d.scroll:SetPoint("BOTTOMRIGHT", d.scroll:GetParent(), "BOTTOMRIGHT", -28, 6)
+    -- Vertical from the materials, horizontal from the PANE. Anchoring both to the materials put
+    -- every row below them in line with the item's title - indented by the width of the icon - and
+    -- that stolen width is exactly what was truncating the note on each row.
+    local pane = d.scroll:GetParent()
+    local paneTop, labelTop = pane:GetTop(), d.matsLabel:GetTop()
+    if paneTop and labelTop then
+        d.scroll:ClearAllPoints()
+        d.scroll:SetPoint("TOPLEFT", pane, "TOPLEFT", 6, -(paneTop - labelTop) - matsBottom)
+        d.scroll:SetPoint("BOTTOMRIGHT", pane, "BOTTOMRIGHT", -28, 6)
+    end
 
     local y, ri, hi = -4, 0, 0
     local function heading(text)
