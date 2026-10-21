@@ -56,6 +56,30 @@ local function BuildPopup()
     popup.note = U.EditBox(popup, 296, "Note (optional) - e.g. I have the mats")
     popup.note:SetPoint("TOPLEFT", 24, -110)
 
+    -- What you are offering. Only on a bid: for a craft you and the crafter settle up however
+    -- you like, but a bid without a number is not an offer, it is a question.
+    popup.priceLabel = U.Text(popup, "GameFontNormalSmall")
+    popup.priceLabel:SetPoint("TOPLEFT", 20, -108)
+    popup.priceLabel:SetText("Offer each")
+    popup.priceBoxes = {}
+    local function coin(after, gap, width, kind)
+        local box = U.EditBox(popup, width, nil, true)
+        box:SetPoint("LEFT", after, "RIGHT", gap, 0)
+        local icon = U.Text(popup, "GameFontHighlightSmall")
+        icon:SetText(("|TInterface\\MoneyFrame\\UI-%sIcon:12:12|t"):format(kind))
+        icon:SetPoint("LEFT", box, "RIGHT", 2, 0)
+        popup.priceBoxes[#popup.priceBoxes + 1] = box
+        popup.priceBoxes[#popup.priceBoxes + 1] = icon
+        return box, icon
+    end
+    local pg, pgi = coin(popup.priceLabel, 8, 38, "Gold")
+    local ps, psi = coin(pgi, 4, 26, "Silver")
+    local pc = coin(psi, 4, 26, "Copper")
+    popup.priceG, popup.priceS, popup.priceC = pg, ps, pc
+    function popup.PriceCopper()
+        return (pg:GetNumber() or 0) * 10000 + (ps:GetNumber() or 0) * 100 + (pc:GetNumber() or 0)
+    end
+
     -- Some things can't be handed over even when someone can craft them.
     popup.warn = popup:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
     popup.warn:SetPoint("TOPLEFT", 20, -138)
@@ -70,13 +94,20 @@ local function BuildPopup()
     cancel:SetScript("OnClick", function() popup:Hide() end)
 
     popup.send:SetScript("OnClick", function()
-        local ok, err = GH.Orders.Request(popup.crafter, popup.key, popup.qty:GetNumber(), popup.note:GetText())
+        local ok, err
+        if popup.buying then
+            ok, err = GH.Orders.Offer(popup.crafter, popup.key, popup.qty:GetNumber(),
+                popup.note:GetText(), popup.PriceCopper())
+        else
+            ok, err = GH.Orders.Request(popup.crafter, popup.key, popup.qty:GetNumber(), popup.note:GetText())
+        end
         if ok then
-            -- The request is stored either way: it is (re)sent whenever the crafter is online.
+            -- The order is stored either way: it is (re)sent whenever the other side is online.
+            local verb = popup.buying and "made %s an offer" or "asked %s to craft it"
             if GH.IsOnline(popup.crafter) then
-                GH.msg("asked %s to craft it - see |cffffd100/gh orders|r.", GH.Short(popup.crafter))
+                GH.msg(verb .. " - see |cffffd100/gh orders|r.", GH.Short(popup.crafter))
             else
-                GH.msg("%s is offline - your request will be delivered when they log in.", GH.Short(popup.crafter))
+                GH.msg("%s is offline - it will be delivered when they log in.", GH.Short(popup.crafter))
             end
             popup:Hide()
         else
@@ -86,15 +117,31 @@ local function BuildPopup()
     popup:Hide()
 end
 
-function GH.OpenRequest(crafter, key)
+--- Offer to buy one a guildie has already posted. Same popup, same order record, same tab -
+--- the only differences are the word, the price and which message it goes out as.
+function GH.OpenOffer(holder, key, listing)
+    GH.OpenRequest(holder, key, listing or true)
+end
+
+function GH.OpenRequest(crafter, key, buying)
     BuildPopup()
     popup.crafter, popup.key = crafter, key
-    popup.title:SetText("Ask " .. GH.Short(crafter) .. " to craft")
+    popup.buying = buying and true or nil
+    popup.priceLabel:SetShown(popup.buying)
+    for _, w in ipairs(popup.priceBoxes) do w:SetShown(popup.buying) end
+    popup.send:SetText(popup.buying and "Send offer" or "Send request")
+    -- Start from what they are asking, when they have said: most offers are "yes, fine".
+    local asking = type(buying) == "table" and buying.price or 0
+    popup.priceG:SetText(asking >= 10000 and tostring(math.floor(asking / 10000)) or "")
+    popup.priceS:SetText(asking > 0 and tostring(math.floor(asking % 10000 / 100)) or "")
+    popup.priceC:SetText(asking > 0 and tostring(asking % 100) or "")
+    popup.title:SetText(popup.buying and ("Offer " .. GH.Short(crafter) .. " for this")
+        or ("Ask " .. GH.Short(crafter) .. " to craft"))
     popup.icon:SetKey(key)
     popup.item:SetText(C.KeyColor(key) .. (I.Name(key) or "...") .. "|r")
     popup.qty:SetNumber(1)
     popup.note:SetText("")
-    local blocked = type(key) == "number" and C.UntradableType(key)
+    local blocked = type(key) == "number" and not popup.buying and C.UntradableType(key)
     if blocked == "bop" then
         popup.warn:SetText("This item is soulbound when crafted, so " .. GH.Short(crafter)
             .. " can't hand it over. Ask them to craft it from your own materials instead.")
@@ -413,7 +460,11 @@ local function RenderDetail()
             r.tip = { GH.LongName(l.owner), l.l.note ~= "" and l.l.note or nil }
             r.b1:SetShown(not isMe)
             r.b1:SetEnabled(GH.IsOnline(l.owner))
-            r.b2:Hide()
+            -- Somebody has one spare. The thing to do is ask THEM for it, which reaches them
+            -- even when they are offline - not tell the whole guild you are looking for one.
+            r.b2:SetShown(not isMe)
+            r.b2:SetText("Offer")
+            r.b2:SetScript("OnClick", function() GH.OpenOffer(l.owner, key, l.l) end)
             r.b1:SetScript("OnClick", function() U.Whisper(l.owner, key) end)
         end
     end

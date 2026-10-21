@@ -1,6 +1,12 @@
 -- Guildhall - craft requests between guildies.
 --
 --   ORD (requester -> crafter)  id, item key, quantity, note
+--   BID (buyer -> holder)       id, item key, quantity, note, copper each - for an item they
+--                               have already posted, rather than one they would make. Its own
+--                               kind on purpose: an unknown kind is ignored by an older
+--                               client, while an ORD with extra fields would be read and
+--                               shown to them as a request to CRAFT something they own.
+--                               Everything after delivery - ACK, OST, OSY - is shared.
 --   ACK (crafter -> requester)  id, crafter's status, reagents - confirms delivery
 --   OST (either way)            requester, id, new status
 --   OSY (either way)            every request between the two of us, so a side that lost its copy
@@ -80,31 +86,50 @@ local function TrySend(o)
     if (o.tries or 0) >= 10 then return end
     o.tries = (o.tries or 0) + 1
     o.lastTry = GH.Now()
-    Sync.Send(join("ORD", PROTO, o.id, C.KeyToWire(o.item), o.qty, C.Clean(o.note)), nil, "WHISPER", o.crafter)
+    if o.kind == "buy" then
+        Sync.Send(join("BID", PROTO, o.id, C.KeyToWire(o.item), o.qty, C.Clean(o.note),
+            tostring(o.price or 0)), nil, "WHISPER", o.crafter)
+    else
+        Sync.Send(join("ORD", PROTO, o.id, C.KeyToWire(o.item), o.qty, C.Clean(o.note)), nil, "WHISPER", o.crafter)
+    end
 end
 
-function O.Request(crafter, key, qty, note)
+-- Asking one guildie for one item. "craft" is a job for somebody who can make it; "buy" is an
+-- offer for one they have already posted. Everything after this point is the same for both,
+-- which is why they share a record, a status flow and a tab.
+local function Ask(kind, other, key, qty, note, price)
     local g = Store()
     local me = GH.Me()
     if not g or not me then return false, "You need to be in a guild." end
-    if crafter == me then return false, "That's you." end
+    if other == me then return false, "That's you." end
     if not C.KeyToWire(key) then return false, "Unknown item." end
     local open = 0
     for _, o in pairs(g.outgoing) do
         if o.requester == me and not FINISHED[o.status] then open = open + 1 end
     end
-    if open >= MAX_OUTGOING then return false, "You have too many open requests." end
+    if open >= MAX_OUTGOING then return false, "You have too many open orders." end
 
     local id = GH.NextId()
     local o = {
-        oid = me .. "#" .. id, id = id, requester = me, crafter = crafter,
+        oid = me .. "#" .. id, id = id, requester = me, crafter = other,
         item = key, qty = math.max(1, math.min(tonumber(qty) or 1, 999)), note = C.Clean(note),
         status = "sending", created = GH.Now(), updated = GH.Now(),
+        kind = kind ~= "craft" and kind or nil,
+        price = price and price > 0 and math.min(price, 99999999) or nil,
     }
     g.outgoing[o.oid] = o
     TrySend(o)
     Changed()
     return true
+end
+
+function O.Request(crafter, key, qty, note)
+    return Ask("craft", crafter, key, qty, note)
+end
+
+--- An offer for something a guildie has already posted as spare.
+function O.Offer(holder, key, qty, note, price)
+    return Ask("buy", holder, key, qty, note, price)
 end
 
 function O.Cancel(oid)
@@ -176,7 +201,9 @@ end
 -- ---------------------------------------------------------------------------
 local STATUS_WORDS = { accepted = "accepted", declined = "declined", done = "finished" }
 
-Sync.Handle("ORD", function(f, _, sender)
+-- ORD and BID differ in one word and one number. Shared, so a change to how an order is taken
+-- in cannot apply to only one of them.
+local function TakeOrder(f, sender, kind, price)
     local g = Store()
     local me = GH.Me()
     if not g or not me then return end
@@ -197,18 +224,29 @@ Sync.Handle("ORD", function(f, _, sender)
             oid = oid, id = id, requester = sender, crafter = me, item = key,
             qty = math.max(1, math.min(qty or 1, 999)), note = C.Clean(f[6]),
             status = "new", created = GH.Now(), updated = GH.Now(),
+            kind = kind ~= "craft" and kind or nil,
+            price = price and price > 0 and math.min(price, 99999999) or nil,
         }
         g.incoming[oid] = o
         if GH.Settings().notifyRequests then
             local roster = GH.roster[sender]
             local link = C.KeyLink(key) or C.KeyName(key) or "an item"
-            GH.msg("%s asks you to craft %s x%d. |cffffd100/gh orders|r", GH.ColorName(sender, roster and roster.class), link, o.qty)
+            local who = GH.ColorName(sender, roster and roster.class)
+            if o.kind == "buy" then
+                GH.msg("%s offers %s for your %s x%d. |cffffd100/gh orders|r", who,
+                    (o.price or 0) > 0 and GH.Money(o.price) .. " each" or "a trade", link, o.qty)
+            else
+                GH.msg("%s asks you to craft %s x%d. |cffffd100/gh orders|r", who, link, o.qty)
+            end
             PlaySound(SOUNDKIT and SOUNDKIT.TELL_MESSAGE or 3081)
         end
         Changed()
     end
     Sync.Send(join("ACK", PROTO, id, o.status, C.EncodeReagents(GH.Index.ReagentsFor(key))), nil, "WHISPER", sender)
-end)
+end
+
+Sync.Handle("ORD", function(f, _, sender) TakeOrder(f, sender, "craft") end)
+Sync.Handle("BID", function(f, _, sender) TakeOrder(f, sender, "buy", tonumber(f[7])) end)
 
 Sync.Handle("ACK", function(f, _, sender)
     local g = Store()
@@ -275,8 +313,10 @@ function O.Replay(who)
     replayed[who] = GH.Now()
     local lines = {}
     local function add(o)
+        -- kind and price are appended, so a line from an older client is eight fields and still
+        -- reads: it simply has no bids to tell us about.
         lines[#lines + 1] = join(o.requester, o.id, C.KeyToWire(o.item) or "", o.qty or 1, o.status,
-            o.created or 0, o.updated or 0, C.Clean(o.note))
+            o.created or 0, o.updated or 0, C.Clean(o.note), o.kind or "craft", o.price or 0)
     end
     for _, o in pairs(g.outgoing) do
         if o.requester == me and o.crafter == who then add(o) end
@@ -302,8 +342,10 @@ Sync.Handle("OSY", function(_, body, sender)
         local qty, status, created, updated = Int(f[4]), f[5], Int(f[6]), Int(f[7])
         -- Strict: a damaged line is skipped, never half-applied, and the numbers stay in range so a
         -- peer can't hand us a quantity, an id or a date out of thin air.
-        if #f == 8 and requester and id and id <= 10000000 and key and qty and KNOWN_STATUS[status]
-            and created and updated then
+        local kind = (f[9] == "buy") and "buy" or nil
+        local price = Int(f[10])
+        if (#f == 8 or #f == 10) and requester and id and id <= 10000000 and key and qty
+            and KNOWN_STATUS[status] and created and updated then
             local limit = GH.Now() + 86400
             qty = math.max(1, math.min(qty, 999))
             created, updated = math.min(created, limit), math.min(updated, limit)
@@ -316,6 +358,7 @@ Sync.Handle("OSY", function(_, body, sender)
                     g.outgoing[oid] = {
                         oid = oid, id = id, requester = me, crafter = sender, item = key, qty = qty,
                         note = C.Clean(f[8]), status = mine, created = created, updated = updated,
+                        kind = kind, price = price and price > 0 and price or nil,
                     }
                     Sync.stats.restoredOrders = Sync.stats.restoredOrders + 1
                     if id >= (GH.MyData().nextId or 1) then GH.MyData().nextId = id + 1 end
@@ -342,6 +385,9 @@ Sync.Handle("OSY", function(_, body, sender)
                             oid = oid, id = id, requester = sender, crafter = me, item = key, qty = qty,
                             note = C.Clean(f[8]), status = (status == "pending") and "new" or status,
                             created = created, updated = updated,
+                            -- Restored with the kind it was sent as. Without this, a bid that came
+                            -- back through a resync would turn into "craft me one of these".
+                            kind = kind, price = price and price > 0 and price or nil,
                         }
                         Sync.stats.restoredOrders = Sync.stats.restoredOrders + 1
                         changed = true

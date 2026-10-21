@@ -1,4 +1,7 @@
--- Guildhall - Craft orders tab: craft requests made to you, and the ones you've sent.
+-- Guildhall - Orders tab: what guildies have asked of you and what you have asked of them.
+-- Two kinds share it: a craft order (please make me one) and an offer (I will buy the one
+-- you posted). They differ in a word and a price; everything else - delivery while offline,
+-- statuses, the resync - is the same, which is why they are not two tabs.
 local ADDON, GH = ...
 local U, C, I, O = GH.UI, GH.Codec, GH.Index, GH.Orders
 
@@ -52,13 +55,13 @@ local function Refresh()
     if not view then return end
     if not GH.GuildDB() then
         view.list:SetData({})
-        view.empty:SetText("Craft orders work with your guild.\n\n|cff8a8a8aJoin a guild to ask guildies to "
-            .. "craft for you, and to get their requests.|r")
+        view.empty:SetText("Orders work with your guild.\n\n|cff8a8a8aJoin a guild to ask guildies to "
+            .. "craft for you or to sell you what they have spare, and to get their orders.|r")
         view.empty:Show()
         return
     end
     local newCount = O.NewCount()
-    view.sides:SetLabel("incoming", newCount > 0 and ("For you to craft |cffff6060(" .. newCount .. ")|r") or "For you to craft")
+    view.sides:SetLabel("incoming", newCount > 0 and ("Asked of you |cffff6060(" .. newCount .. ")|r") or "Asked of you")
     local data = side == "incoming" and O.Incoming() or O.Outgoing()
     if side == "incoming" then
         -- Wanted posts you can craft sit under the direct requests, so they can't be missed.
@@ -74,8 +77,8 @@ local function Refresh()
     view.list:SetData(data)
     if #data == 0 then
         view.empty:SetText(side == "incoming"
-            and "No requests yet. Guildies can ask you to craft anything you've shared."
-            or "You haven't asked anyone to craft something. Find an item in Browse and press Request.")
+            and "Nothing yet. Guildies can ask you to craft what you've shared, or offer to buy what you've posted."
+            or "You haven't asked anyone for anything. Find an item in Browse and press Request or Offer.")
         view.empty:Show()
     else
         view.empty:Hide()
@@ -85,7 +88,9 @@ end
 local function Build(f)
     view = f
     f.sides = U.Segmented(f, {
-        { value = "incoming", label = "For you to craft" },
+        -- "Asked of you", not "For you to craft": half of what lands here is somebody offering
+        -- to buy something you already have, which involves no crafting at all.
+        { value = "incoming", label = "Asked of you" },
         { value = "outgoing", label = "Your orders" },
     }, 320, function(v)
         side = v
@@ -167,7 +172,16 @@ local function Build(f)
                 status = status .. " |cff8a8a8a(they may not have Guildhall)|r"
             end
             local note = (o.note and o.note ~= "") and ("  |cffbbbbbb\"" .. o.note .. "\"|r") or ""
-            row.line2:SetText(("%s %s  |cff6a6a6a%s|r  %s%s"):format(incoming and "from" or "to", who, GH.Ago(o.created), status, note))
+            -- Which kind, in the line that already says who and when. A craft order reads as it
+            -- always did; an offer says so, and says what for.
+            local what = ""
+            if o.kind == "buy" then
+                what = (o.price or 0) > 0
+                    and ("|cffffd100offer %s each|r  "):format(GH.Money(o.price))
+                    or "|cffffd100offer to buy|r  "
+            end
+            row.line2:SetText(("%s%s %s  |cff6a6a6a%s|r  %s%s"):format(what,
+                incoming and "from" or "to", who, GH.Ago(o.created), status, note))
             row.line3:SetText(MaterialsText(o))
 
             local finished = O.FINISHED[o.status]
@@ -203,7 +217,9 @@ local function Build(f)
     f.empty:SetWidth(420)
 end
 
--- "Craft orders", not "Requests": a wanted post is a request too, and calling only this one
--- by that name made the other look like it belonged here. The id stays - it is what
--- /gh requests, GH.ShowTab and the minimap button all ask for.
-GH.RegisterTab("requests", "Craft orders", Build, Refresh)
+-- "Orders", not "Requests" and no longer "Craft orders": a wanted post is a request too, so
+-- that name made it look as though it belonged here, and this tab now holds offers to buy as
+-- well as jobs to craft. The id stays - it is what /gh requests, GH.ShowTab and the minimap
+-- button all ask for, and renaming an identifier to match a label breaks three things to
+-- tidy one.
+GH.RegisterTab("requests", "Orders", Build, Refresh)

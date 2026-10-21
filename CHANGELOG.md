@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **You can offer to buy something a guildie has posted.** Before, the only thing you could do with
+  a spare somebody listed was whisper them or tell the whole guild you wanted one. There is an
+  Offer button on their row now: name a price, and it reaches them even if they are offline, the
+  same way a craft order does. Offers and craft orders share one tab, now called **Orders**, with
+  what people have asked of you on one side and what you have asked of them on the other.
+- Guildies on an older Guildhall will not receive offers at all - they will not see them mislabelled
+  as something else.
+
 - **You can put a price on something you offer**, in gold, silver and copper rather than whole gold
   - a leather is not worth a gold piece. Wanted posts take the same three boxes. Guildies on an
   older Guildhall still see the offer; they just will not see the price.
