@@ -7,7 +7,9 @@ local U, C, I, O = GH.UI, GH.Codec, GH.Index, GH.Orders
 
 local view
 local side = "incoming"
-local ROWS, ROW_H = 7, 54
+-- A line each for the kind, the note and the materials, so none of them is truncated to make
+-- room for the others. ROWS is only a starting guess: FitToHeight decides how many really fit.
+local ROWS, ROW_H = 7, 72
 
 local IN_STATUS = {
     new = "|cffffd100new|r",
@@ -46,6 +48,21 @@ local function MaterialsText(o)
     return "|cffe6b34dMaterials:|r |cffbbbbbb" .. table.concat(parts, ", ") .. "|r"
 end
 
+-- Facts fill the lines from the top in the order given, and anything empty is skipped rather
+-- than left as a blank line. Without this an order with no note would show a hole where one would
+-- have been, and the materials would sit one line lower than on the row above it.
+local function SetLines(row, ...)
+    local at = 0
+    for i = 1, select("#", ...) do
+        local text = select(i, ...)
+        if text and text ~= "" then
+            at = at + 1
+            if row.lines[at] then row.lines[at]:SetText(text) end
+        end
+    end
+    for i = at + 1, #row.lines do row.lines[i]:SetText("") end
+end
+
 local function SetButton(b, text, fn)
     if not text then
         b:Hide()
@@ -79,6 +96,9 @@ local function Refresh()
             data = rows
         end
     end
+    -- Grow into the box before filling it: the rows are tall enough now that how many fit is
+    -- worth asking rather than assuming, and an order list that runs off the bottom hides orders.
+    view.list:FitToHeight()
     view.list:SetData(data)
     if #data == 0 then
         view.empty:SetText(side == "incoming"
@@ -135,6 +155,12 @@ local function Build(f)
             row.line3 = U.Text(row, "GameFontHighlightSmall")
             row.line3:SetPoint("TOPLEFT", row.line2, "BOTTOMLEFT", 0, -3)
             row.line3:SetPoint("RIGHT", row.b3, "LEFT", -8, 0)
+            row.line4 = U.Text(row, "GameFontHighlightSmall")
+            row.line4:SetPoint("TOPLEFT", row.line3, "BOTTOMLEFT", 0, -3)
+            row.line4:SetPoint("RIGHT", row.b3, "LEFT", -8, 0)
+            -- Every line is bounded on the right by the buttons, so none of them can run underneath
+            -- one and come back out the other side.
+            row.lines = { row.line2, row.line3, row.line4 }
         end,
         function(row, o, index)
             row.bg:SetShown(index % 2 == 0)
@@ -142,8 +168,7 @@ local function Build(f)
             if o.heading then
                 row.icon:Hide()
                 row.title:SetText("|cffe6b34d" .. o.heading .. "|r")
-                row.line2:SetText("|cff8a8a8aGuildies posted these under Wanted, and one of your recipes makes them.|r")
-                row.line3:SetText("")
+                SetLines(row, "|cff8a8a8aGuildies posted these under Wanted, and one of your recipes makes them.|r")
                 SetButton(row.b1, nil); SetButton(row.b2, nil); SetButton(row.b3, nil)
                 return
             end
@@ -155,9 +180,11 @@ local function Build(f)
                 row.title:SetText(GH.Listings.WantText(w.w, C.KeyColor(w.key) .. (I.Name(w.key) or "...") .. "|r"))
                 local who = GH.IsOnline(w.owner) and GH.ColorName(w.owner, w.class)
                     or ("|cff8a8a8a" .. GH.Short(w.owner) .. "|r")
-                local note = (w.w.note and w.w.note ~= "") and ("  |cffbbbbbb\"" .. w.w.note .. "\"|r") or ""
-                row.line2:SetText(("wanted by %s  |cff6a6a6a%s|r%s"):format(who, GH.Ago(w.w.posted), note))
-                row.line3:SetText(("|cff60d060You can make it (%s).|r"):format(w.prof))
+                local note = (w.w.note and w.w.note ~= "") and ("|cffbbbbbb\"" .. w.w.note .. "\"|r") or ""
+                SetLines(row,
+                    ("wanted by %s  |cff6a6a6a%s|r"):format(who, GH.Ago(w.w.posted)),
+                    note,
+                    ("|cff60d060You can make it (%s).|r"):format(w.prof))
                 local online = GH.IsOnline(w.owner)
                 SetButton(row.b1, online and "Whisper" or "Offline", online and function() U.Whisper(w.owner, w.key) end or nil)
                 row.b1:SetEnabled(online)
@@ -176,18 +203,22 @@ local function Build(f)
             if not incoming and o.status == "sending" and (o.tries or 0) >= 3 then
                 status = status .. " |cff8a8a8a(they may not have Guildhall)|r"
             end
-            local note = (o.note and o.note ~= "") and ("  |cffbbbbbb\"" .. o.note .. "\"|r") or ""
-            -- Which kind, in the line that already says who and when. A craft order reads as it
-            -- always did; an offer says so, and says what for.
+            local note = (o.note and o.note ~= "") and ("|cffbbbbbb\"" .. o.note .. "\"|r") or ""
+            -- Which kind, on the line that already says who and when. A craft order reads as it
+            -- always did; an offer says so, and says what for. The note is NOT on this line: it is
+            -- the one part written by a person, and sharing a line with five generated facts is
+            -- what left it as "demo - nobody really s...".
             local what = ""
             if o.kind == "buy" then
                 what = (o.price or 0) > 0
                     and ("|cffffd100offer %s each|r  "):format(GH.Money(o.price))
                     or "|cffffd100offer to buy|r  "
             end
-            row.line2:SetText(("%s%s %s  |cff6a6a6a%s|r  %s%s"):format(what,
-                incoming and "from" or "to", who, GH.Ago(o.created), status, note))
-            row.line3:SetText(MaterialsText(o))
+            SetLines(row,
+                ("%s%s %s  |cff6a6a6a%s|r  %s"):format(what, incoming and "from" or "to", who,
+                    GH.Ago(o.created), status),
+                note,
+                MaterialsText(o))
 
             local finished = O.FINISHED[o.status]
             local whisper = GH.IsOnline(other) and function() U.Whisper(other, o.item) end or nil

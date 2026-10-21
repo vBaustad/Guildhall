@@ -16,6 +16,11 @@
 - Guildies on an older Guildhall will not receive offers at all - they will not see them mislabelled
   as something else.
 
+- **An order's note is readable.** A row in Orders gave its second line to the kind, the price, who
+  sent it, when, the status and the note, in that order - so the note, the one part a person wrote,
+  got whatever was left and usually ended as "please can you make...". Rows are taller now and each
+  of those gets a line, with the note on its own. Orders are rare enough to afford the room.
+
 - **You can put a price on something you offer**, in gold, silver and copper rather than whole gold
   - a leather is not worth a gold piece. Wanted posts take the same three boxes. Guildies on an
   older Guildhall still see the offer; they just will not see the price.
