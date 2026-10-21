@@ -16,6 +16,10 @@
 - **My Guildhall shows what is in your bags**, in the space under your professions that was empty,
   grouped into materials, gear and consumables with the best things first. Click one to offer it or
   post it as wanted; shift-click links it in chat.
+- **You can search for something to want.** Posting a wanted item offered you your own bags, which
+  is the one place the thing you are looking for is not. Wanting now has a search over everything
+  the professions make and everything they are made from - so you can ask the guild for 400 Linen
+  Cloth. Offering still picks from your bags, which is the only place an offer can come from.
 - **You can put an item into My Guildhall without opening your bags.** Offering something or
   posting a want needed you to drag the item onto the slot or shift-click it in your bags - with
   your bags shut there was no way in at all. There is a "Choose an item" button that lists what you

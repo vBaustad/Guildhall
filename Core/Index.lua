@@ -415,6 +415,66 @@ function I.ReagentsFor(key)
     return C.DecodeReagents(GH.DB().reagents[key])
 end
 
+-- Every item ID the bundled recipe data mentions: what the professions make, and what they are
+-- made from. Built once, because parsing 2000 recipes to answer one keystroke would be absurd.
+local searchable
+local function SearchableItems()
+    if searchable then return searchable end
+    searchable = {}
+    local seen = {}
+    for spellID in pairs((GH.Data and GH.Data.recipes) or {}) do
+        local r = C.Recipe(spellID)
+        if r then
+            if r.item and r.item > 0 and not seen[r.item] then
+                seen[r.item] = true
+                searchable[#searchable + 1] = r.item
+            end
+            for _, rg in ipairs(r.reagents or {}) do
+                if not seen[rg[1]] then
+                    seen[rg[1]] = true
+                    searchable[#searchable + 1] = rg[1]
+                end
+            end
+        end
+    end
+    return searchable
+end
+
+--- Items whose name contains `query`, for the "what do you want?" box. Only names the client has
+--- already cached can be matched - there is no way to ask the game for a name it has not been
+--- told - so a miss here means "not loaded yet", never "no such item". Anything missing is asked
+--- for, so the same search a moment later finds more.
+function I.SearchItems(query, max)
+    local q = strtrim(query or ""):lower()
+    local out = {}
+    if #q < 2 then return out end
+    -- C.KeyName, not I.Name: I.Name queues a request for every name it cannot answer, and there
+    -- are three thousand of these, so one search would have fired three thousand requests. The
+    -- misses are warmed a few hundred at a time instead, which fills the corpus over a handful of
+    -- searches without a burst.
+    local warm = 0
+    for _, id in ipairs(SearchableItems()) do
+        local name = C.KeyName(id)
+        if not name then
+            if warm < 200 then
+                warm = warm + 1
+                I.Name(id)
+            end
+        elseif name:lower():find(q, 1, true) then
+            out[#out + 1] = { id = id, name = name }
+            if #out >= (max or 20) then break end
+        end
+    end
+    table.sort(out, function(a, b)
+        -- A name that STARTS with what you typed is what you meant more often than one that
+        -- merely contains it: "linen" should reach Linen Cloth before Bolt of Linen Cloth.
+        local sa, sb = a.name:lower():find(q, 1, true) == 1, b.name:lower():find(q, 1, true) == 1
+        if sa ~= sb then return sa end
+        return a.name < b.name
+    end)
+    return out
+end
+
 local function AddTooltipLines(tt, itemID)
     if tt.guildhallDone then return end
     if not GH.Settings().tooltip or not IsInGuild() then return end

@@ -25,6 +25,12 @@ local function UpdateComposer()
     end
     c.priceLabel:SetShown(not offer)
     c.price:SetShown(not offer)
+    c.priceCoin:SetShown(not offer)
+    -- Your own bags are the only place an OFFER can come from, and almost never where a WANT
+    -- comes from - you are asking for something you do not have. So the bag list belongs to one
+    -- mode and a search belongs to the other.
+    c.pick:SetShown(offer)
+    c.find:SetShown(not offer)
     c.post:SetText(offer and "List it" or "Post wanted")
     c.post:SetEnabled(composer.key ~= nil)
     c.clear:SetShown(composer.key ~= nil)
@@ -463,6 +469,37 @@ local function Build(f)
     U.Tooltip(c.pick, "Choose an item",
         "Pick something out of your bags. You can also drag one onto the slot, or shift-click "
         .. "one in your bags.")
+
+    -- Wanting something means naming something you have not got, so this searches what the
+    -- professions make and what they are made from - which is where "400 Linen Cloth" lives.
+    c.find = U.EditBox(comp, 150, "Search for an item...")
+    c.find:SetPoint("TOPRIGHT", -10, -42)
+    c.find:SetScript("OnEnterPressed", function(self)
+        local matches = I.SearchItems(self:GetText(), 20)
+        if #matches == 0 then
+            GH.msg("nothing found for \"%s\" - try fewer letters, or a name you have seen in game.",
+                self:GetText())
+            return
+        end
+        if #matches == 1 or not (MenuUtil and MenuUtil.CreateContextMenu) then
+            SetComposerItem(C.KeyLink(matches[1].id) or ("item:" .. matches[1].id))
+            self:ClearFocus()
+            return
+        end
+        MenuUtil.CreateContextMenu(self, function(_, root)
+            root:CreateTitle("Did you mean")
+            for _, m in ipairs(matches) do
+                root:CreateButton(("|T%s:14|t %s%s|r"):format(C.KeyIcon(m.id), C.KeyColor(m.id),
+                    m.name), function()
+                    SetComposerItem(C.KeyLink(m.id) or ("item:" .. m.id))
+                end)
+            end
+        end)
+        self:ClearFocus()
+    end)
+    U.Tooltip(c.find, "Search",
+        "Type part of an item's name and press Enter. Searches everything the professions make "
+        .. "and everything they are made from.")
 
     -- And a way OUT. Right-clicking the slot cleared it, which nothing said and nobody found.
     c.clear = U.Button(comp, "Clear", 54, 20)
