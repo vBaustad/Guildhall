@@ -229,6 +229,14 @@ local function LayoutMaterials(d, reagents)
             x, y = 0, y - 17
             line = line + 1
         end
+        -- One reagent longer than the whole pane still has to stay inside it: the wrap above only
+        -- moves things to a new line, and a new line is no help when the thing does not fit on one.
+        if w - 12 > width then
+            b.text:SetWidth(width - 17)
+            w = width + 12
+        else
+            b.text:SetWidth(0)
+        end
         b:SetWidth(w - 12)
         b:ClearAllPoints()
         b:SetPoint("TOPLEFT", d.matsLabel, "TOPLEFT", x, y)
@@ -306,8 +314,19 @@ local function RenderDetail()
     -- Everything below the title follows the title, because the title is now one line or two
     -- depending on the item's name. The materials used to sit at a fixed offset and a long name
     -- simply printed over them.
+    -- Vertical from the subtitle, horizontal from the PANE - the same split the scroll area below
+    -- needs, and for the same reason. Anchored to the subtitle it inherited the title's indent,
+    -- so it started level with the item's name while the heading below it started at the pane's
+    -- edge, and the width it was given to wrap in was measured from the pane it was not aligned
+    -- to. The reagents ran off the right-hand side by exactly that difference.
+    local pane = d.matsLabel:GetParent()
+    local paneTop, subBottom = pane:GetTop(), d.sub:GetBottom()
     d.matsLabel:ClearAllPoints()
-    d.matsLabel:SetPoint("TOPLEFT", d.sub, "BOTTOMLEFT", 0, -8)
+    if paneTop and subBottom then
+        d.matsLabel:SetPoint("TOPLEFT", pane, "TOPLEFT", 10, -(paneTop - subBottom) - 8)
+    else
+        d.matsLabel:SetPoint("TOPLEFT", d.sub, "BOTTOMLEFT", 0, -8)
+    end
     -- Vertical from the materials, horizontal from the PANE. Anchoring both to the materials put
     -- every row below them in line with the item's title - indented by the width of the icon - and
     -- that stolen width is exactly what was truncating the note on each row.
