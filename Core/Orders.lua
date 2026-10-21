@@ -354,8 +354,9 @@ Sync.Handle("OST", function(f, _, sender)
         if o and o.crafter == sender and STATUS_WORDS[status] and o.status ~= "cancelled" then
             o.status, o.updated = status, GH.Now()
             local roster = GH.roster[sender]
-            if not GH.IsBlocked(sender) then GH.msg("%s %s your request for %s.", GH.ColorName(sender, roster and roster.class),
-                STATUS_WORDS[status], C.KeyLink(o.item) or C.KeyName(o.item) or "an item") end
+            if not GH.IsBlocked(sender) then GH.msg("%s %s your %s for %s.", GH.ColorName(sender, roster and roster.class),
+                STATUS_WORDS[status], o.kind == "buy" and "offer" or "request",
+                C.KeyLink(o.item) or C.KeyName(o.item) or "an item") end
             Changed()
         end
     elseif requester == sender then

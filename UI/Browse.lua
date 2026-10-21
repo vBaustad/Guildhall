@@ -7,7 +7,7 @@ local view      -- the tab frame
 local LIST_ROWS, LIST_ROW_H = 15, 22
 -- Tall enough that the note below the name clears the buttons. At 36 the buttons sat in the
 -- middle of the row, which is exactly where the second line of text is, so the note had to be
--- truncated at their left edge - "offline - requests wait until they log in (fro...". The buttons
+-- truncated at their left edge - "offline - orders wait until you are both on (fro...". The buttons
 -- now take the top line beside the name and the note has the whole width underneath.
 local DETAIL_ROW_H = 44
 -- The skill-or-quantity column in a detail row, measured from the buttons so it lines up down the

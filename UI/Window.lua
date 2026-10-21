@@ -43,7 +43,9 @@ local function RefreshActive()
         win.status:SetText(("|c%s<%s>|r  |cff8a8a8a%s|r"):format(GH.CREAM, guild, shared))
     end
     local todo = GH.Orders.NewCount() + #GH.Index.WantsICanMake()
-    win.tabs:SetLabel("requests", todo > 0 and ("Requests |cffff6060(" .. todo .. ")|r") or "Requests")
+    -- The tab is registered as "Orders"; this line sets it again on every count change, so the
+    -- name has to be right in both places or the rename lasts until the first refresh.
+    win.tabs:SetLabel("requests", todo > 0 and ("Orders |cffff6060(" .. todo .. ")|r") or "Orders")
 end
 
 function GH.RefreshWindow()

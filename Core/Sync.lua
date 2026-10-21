@@ -671,7 +671,7 @@ function GH.PrintStatus()
             if not GH.Orders.FINISHED[o.status] then open = open + 1 end
         end
     end
-    GH.msg("stored requests: %d (%d open). Restored from guildies this session: %d posts, %d requests.",
+    GH.msg("stored orders: %d (%d open). Restored from guildies this session: %d posts, %d orders.",
         orders, open, Sync.stats.restoredPosts, Sync.stats.restoredOrders)
     if roster == 0 then
         GH.msg("roster: 0 members - it fills in when the client provides it; sharing works without it.")

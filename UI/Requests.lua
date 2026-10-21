@@ -26,6 +26,11 @@ local OUT_STATUS = {
 }
 
 local function MaterialsText(o)
+    -- An offer to buy is for an item that already exists in somebody's bags. Listing what it
+    -- would take to craft one tells the holder to go and gather reagents for a potion they are
+    -- being offered money for, which is the exact confusion the separate message kind exists to
+    -- avoid - and it reached the screen anyway, in the row rather than on the wire.
+    if o.kind == "buy" then return "" end
     local reagents = O.Reagents(o)
     if not reagents then return "" end
     local parts = {}

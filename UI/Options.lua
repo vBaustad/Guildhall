@@ -180,7 +180,7 @@ local function Build(f, extraButton)
             b:SetEnabled(#list > 0)
         end
     end
-    listLine("Blocked players...", "Right-click a name in Browse or Requests to block someone. Their posts and "
+    listLine("Blocked players...", "Right-click a name in Browse or Orders to block someone. Their posts and "
         .. "craft orders are hidden from you. Nothing is sent - they can't tell.",
         function()
             local out = {}
