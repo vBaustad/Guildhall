@@ -332,6 +332,7 @@ even better together.
   categories; opening one only adds recipes the built-in data doesn't know yet.
 - Built-in recipe data from the game: required skill, reagents, yield and crafting station (including camp
   stations like the Master Forge) show in Browse and on craft requests, even before anyone has shared them.
+- Messages to guildies wait while the game locks addon chat, and go out once it lifts.
 - No more "blocked from an action only available to the Blizzard UI" pop-ups. Guildhall no longer asks the game
   for the guild roster or for protected profession info.
 - Sync protocol 2: not compatible with 0.1.0. Guildies need this version to see each other.

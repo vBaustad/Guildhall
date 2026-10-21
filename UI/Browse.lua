@@ -446,7 +446,11 @@ local function RenderDetail()
             -- "Blacksmithing 40" for this item, so printing "Blacksmithing" again on every row
             -- spends the width that was truncating it on a word the reader just read.
             r.meta:SetText(("|cff8a8a8askill %d|r"):format(c.rank or 0))
-            local note = isMe and "" or (GH.IsOnline(c.owner) and "|cff60d060online|r" or "offline - requests wait until they log in")
+            -- "until they log in" was the same overstatement as the other four, in the one
+            -- place it reads as a status rather than a promise: logging in is not enough, you
+            -- have to be there as well.
+            local note = isMe and "" or (GH.IsOnline(c.owner) and "|cff60d060online|r"
+                or "offline - orders wait until you are both on")
             if c.stale then note = note .. " |cff8a8a8a(from your last session)|r" end
             r.note:SetText(note)
             r.tip = { GH.LongName(c.owner), ("%s, skill %d"):format(c.prof, c.rank or 0) }

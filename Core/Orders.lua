@@ -263,6 +263,15 @@ Sync.Handle("BID", function(f, _, sender) TakeOrder(f, sender, "buy", tonumber(f
 -- /gh demo clear takes it away again, and /gh debug has to be on, so it cannot be walked into.
 local DEMO = "Demo Buyer-Demo"
 
+-- A demo row is a prop, and a prop that survives a relog is litter. Whatever state /gh demo
+-- clear is in, nothing from a sender who does not exist is here after you log in again.
+GH.Listen("LOGIN", function()
+    local g = Store()
+    for oid in pairs(g and g.incoming or {}) do
+        if oid:sub(1, #DEMO) == DEMO then g.incoming[oid] = nil end
+    end
+end)
+
 function O.Demo(rest)
     if not GH.debug then
         GH.msg("that is a debug prop - turn debug on first with |cffffd100/gh debug|r.")

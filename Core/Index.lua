@@ -648,7 +648,7 @@ function GH.SelfTest(quiet)
     -- setting are all put back: a test must not announce a sale that is not happening.
     if GH.Orders and GH.Sync.Loopback and g then
         local peer = "Selftest Buyer-Selftest"
-        local st = GH.Settings()
+        local st = GH.Settings() or {}
         local toldBefore = st.notifyRequests
         st.notifyRequests = false
         GH.Sync.peers[peer] = { seen = GH.Now() }
@@ -658,14 +658,20 @@ function GH.SelfTest(quiet)
             GH.Sync.Loopback(table.concat(f, "\t"), nil, peer)
             return g.incoming and g.incoming[peer .. "#" .. id]
         end
-        local bid = deliver("BID", 990001, 12500)
-        check("an offer arrives as an offer", bid ~= nil and bid.kind == "buy",
-            bid and tostring(bid.kind) or "nothing arrived")
-        check("...carrying the price that was offered", bid ~= nil and bid.price == 12500,
-            bid and tostring(bid.price) or "nothing arrived")
-        local ord = deliver("ORD", 990002, nil)
-        check("a craft order is not mistaken for an offer", ord ~= nil and ord.kind == nil,
-            ord and tostring(ord.kind) or "nothing arrived")
+        -- /gh selftest calls this function with nothing around it, so a mistake of mine in
+        -- here would be a Lua error in a command a player can type. Reported failure, never a
+        -- broken client - and the restore below sits outside, where a throw cannot skip it.
+        local ran, err = pcall(function()
+            local bid = deliver("BID", 990001, 12500)
+            check("an offer arrives as an offer", bid ~= nil and bid.kind == "buy",
+                bid and tostring(bid.kind) or "nothing arrived")
+            check("...carrying the price that was offered", bid ~= nil and bid.price == 12500,
+                bid and tostring(bid.price) or "nothing arrived")
+            local ord = deliver("ORD", 990002, nil)
+            check("a craft order is not mistaken for an offer", ord ~= nil and ord.kind == nil,
+                ord and tostring(ord.kind) or "nothing arrived")
+        end)
+        if not ran then check("the offer checks ran at all", false, tostring(err)) end
         if g.incoming then
             g.incoming[peer .. "#990001"] = nil
             g.incoming[peer .. "#990002"] = nil
