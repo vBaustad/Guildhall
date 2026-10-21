@@ -129,6 +129,17 @@ function GH.OpenRequest(crafter, key, buying)
     popup.buying = buying and true or nil
     popup.priceLabel:SetShown(popup.buying)
     for _, w in ipairs(popup.priceBoxes) do w:SetShown(popup.buying) end
+    -- The price row only exists on a bid, so everything under it moves out of its way only on a
+    -- bid. I put it at -108 beside a note already sitting at -110 and printed one through the
+    -- other: a row that appears conditionally has to push the rest down conditionally too, and
+    -- the window has to grow by the same amount or the buttons end up on top of the note.
+    local drop = popup.buying and 26 or 0
+    popup.note:ClearAllPoints()
+    popup.note:SetPoint("TOPLEFT", 24, -110 - drop)
+    popup.warn:ClearAllPoints()
+    popup.warn:SetPoint("TOPLEFT", 20, -138 - drop)
+    popup.warn:SetPoint("RIGHT", -18, 0)
+    popup:SetHeight(216 + drop)
     popup.send:SetText(popup.buying and "Send offer" or "Send request")
     -- Start from what they are asking, when they have said: most offers are "yes, fine".
     local asking = type(buying) == "table" and buying.price or 0
