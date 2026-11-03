@@ -8,8 +8,7 @@ to spare and who is looking for one. You can then ask a crafter for it, even if 
 Nobody has to fill in a spreadsheet or type anything in guild chat. Guildhall builds the directory from the
 professions and recipes of every guildie who has it installed.
 
-> **Status: beta (0.2.0-beta1).** Built for the WoW: Forever beta. Expect rough edges, and please report what
-> you find.
+> Built for WoW: Forever. Please report what you find.
 
 ## What it does
 

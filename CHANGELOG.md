@@ -1,5 +1,14 @@
 # Guildhall
 
+## 1.0.0
+
+- **Out of beta, for the launch of WoW: Forever.** Checked against the game's newest client, build 1.60.1.70707.
+- **The recipe list now comes from the live game** (build 1.60.1.70707; it was from a beta build).
+  - Three enchants were missing: Enchant Boots - Speed, Enchant Gloves - Holy Power and Enchant Gloves - Arcane Power. Guildhall now finds them at login like any other recipe and shows the skill and materials they need, instead of waiting for the enchanter to open their profession window.
+  - The camp recipes First Aid Kit and Lodestone showed "?" for the skill they need. They show 20.
+  - 37 recipes taught by plans, patterns and formulas showed a skill 5 to 20 points too high. They now show the skill needed to learn them.
+  - Disorienting Smog Potion is no longer a recipe in the game, so it is gone from the list.
+
 ## 0.2.0-beta11
 
 - **You can offer to buy something a guildie has posted.** Before, the only thing you could do with
