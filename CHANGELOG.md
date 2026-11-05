@@ -1,6 +1,6 @@
 # Guildhall
 
-## Unreleased
+## 1.0.1
 
 - **The Guildhall button on Blizzard's guild window no longer covers Invite Member.** It was
   placed once, when the window opened, so opening it on a tab without Invite Member and then
