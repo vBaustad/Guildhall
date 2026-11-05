@@ -1,5 +1,13 @@
 # Guildhall
 
+## Unreleased
+
+- **The Guildhall button on Blizzard's guild window no longer hides behind the panels.** On the
+  tabs with no button of Blizzard's in that corner - Info, Preferred Play Settings and, unless
+  you are an officer or the guild master, Roster - it could line up with another addon's button
+  hanging outside the window, which put it behind that tab's panel. It now only lines up with
+  buttons in the window's own bottom row, and takes the bottom-right corner when there are none.
+
 ## 1.0.1
 
 - **The Guildhall button on Blizzard's guild window no longer covers Invite Member.** It was

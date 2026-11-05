@@ -35,8 +35,17 @@ local function BottomRightButton(parent)
             -- Visible, not just shown: a button on a strip that is itself hidden says it is shown.
             if child ~= button and child.GetObjectType and child:IsVisible() then
                 local kind = child:GetObjectType()
-                local childLeft, childBottom = child:GetLeft(), child:GetBottom()
-                if childLeft and childBottom and (childBottom - bottom) < 40 then
+                local childLeft, childRight = child:GetLeft(), child:GetRight()
+                local childBottom = child:GetBottom()
+                -- IN the window's bottom row: Blizzard's buttons there stand 5 above the edge,
+                -- and its panels stop about 30 above it. Both limits are there because another
+                -- addon's button broke the looser rule. Grudgekeeper hangs a round badge outside
+                -- the window's right edge, 36 up, and on the tabs with nothing of Blizzard's in
+                -- the corner (Info, Preferred Play Settings) it was the only button found - we sat
+                -- beside it, behind the guild news (screenshot, 2026-11-05). Outside the window
+                -- nothing can collide with us, and anything higher up is over the content.
+                if childLeft and childRight and childBottom and (childBottom - bottom) < 20
+                        and childRight <= right + 1 then
                     if kind == "Button" and childLeft > middle then
                         -- Along the bottom edge, in the right-hand half. Not "nearest the right
                         -- corner": that finds only the outermost button, and this window can have
