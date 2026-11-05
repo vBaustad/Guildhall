@@ -1,6 +1,6 @@
 # Guildhall
 
-## Unreleased
+## 1.0.2
 
 - **The Guildhall button on Blizzard's guild window no longer hides behind the panels.** On the
   tabs with no button of Blizzard's in that corner - Info, Preferred Play Settings and, unless

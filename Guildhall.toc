@@ -3,7 +3,7 @@
 ## Category: YippYapp
 ## Notes: Your guild's crafting directory - who can make what, what guildies have spare, wanted posts, and orders to craft or to buy, synced between guildies. Part of YippYapp - addons for WoW: Forever that work even better together.
 ## Author: vebjorn
-## Version: 1.0.1
+## Version: 1.0.2
 ## SavedVariables: GuildhallDB
 ## SavedVariablesPerCharacter: GuildhallCharDB
 ## IconTexture: Interface\AddOns\Guildhall\Media\icon
