@@ -210,7 +210,7 @@ local function Build(f, extraButton)
     end
     -- Takes effect without a reload, so somebody who turns it off can see that it worked.
     checkboxFor("Show a Guildhall button on the guild window",
-        "A button in the bottom-left of Blizzard's own Guild & Communities window, which is where "
+        "A button in the bottom-right of Blizzard's own Guild & Communities window, which is where "
         .. "you already are when you are thinking about your guild.",
         function() return GH.Settings().guildWindowButton ~= false end,
         function(on)

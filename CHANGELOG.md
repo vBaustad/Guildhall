@@ -1,5 +1,13 @@
 # Guildhall
 
+## Unreleased
+
+- **The Guildhall button on Blizzard's guild window no longer covers Invite Member.** It was
+  placed once, when the window opened, so opening it on a tab without Invite Member and then
+  clicking over to Chat brought Invite Member up underneath it. It now moves every time the
+  window changes its own buttons. It also no longer lands on Guild Control, which officers see
+  on the Roster tab, and it is hidden in the small chat-only window, where there is no room.
+
 ## 1.0.0
 
 - **Out of beta, for the launch of WoW: Forever.** Checked against the game's newest client, build 1.60.1.70707.
