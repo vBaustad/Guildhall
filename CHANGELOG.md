@@ -1,6 +1,6 @@
 # Guildhall
 
-## Unreleased
+## 1.0.3
 
 - **Fixed: guildies on another part of the server never showed up.** On the live servers one
   guild spans several of the server's internal realms, and a guildie on a different one than
