@@ -345,7 +345,9 @@ Sync.Handle("OST", function(f, _, sender)
     local g = Store()
     local me = GH.Me()
     if not g or not me then return end
-    local requester, id, status = f[3], f[4], f[5]
+    -- The requester as the sender spells them: with the requester's own realm when they wrote it,
+    -- with the crafter's when the crafter did. GH.LocalKey makes it ours either way.
+    local requester, id, status = GH.LocalKey(f[3]), f[4], f[5]
     if not requester or not id then return end
     local oid = requester .. "#" .. id
     if requester == me then
@@ -413,7 +415,7 @@ Sync.Handle("OSY", function(_, body, sender)
     local changed = false
     for line in (body .. "\n"):gmatch("(.-)\n") do
         local f = { strsplit("\t", line) }
-        local requester, id, key = f[1], Int(f[2]), C.WireToKey(f[3])
+        local requester, id, key = GH.LocalKey(f[1]), Int(f[2]), C.WireToKey(f[3])
         local qty, status, created, updated = Int(f[4]), f[5], Int(f[6]), Int(f[7])
         -- Strict: a damaged line is skipped, never half-applied, and the numbers stay in range so a
         -- peer can't hand us a quantity, an id or a date out of thin air.

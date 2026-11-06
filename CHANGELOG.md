@@ -1,5 +1,15 @@
 # Guildhall
 
+## Unreleased
+
+- **Fixed: guildies on another part of the server never showed up.** On the live servers one
+  guild spans several of the server's internal realms, and a guildie on a different one than
+  yours was turned away when their professions and posts arrived. The window said something like
+  "3 guildies online with Guildhall - waiting for what they share" and stayed that way, so for
+  many guilds the directory was simply empty. They are taken in now, and answers to orders and
+  offers between you reach each other too. Guildies fill in as they come online, and each of you
+  needs this update to see the others.
+
 ## 1.0.2
 
 - **The Guildhall button on Blizzard's guild window no longer hides behind the panels.** On the

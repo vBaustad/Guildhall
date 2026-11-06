@@ -806,6 +806,28 @@ function GH.KnownGuildie(full)
     return GH.Sync and GH.Sync.peers[full] ~= nil
 end
 
+-- A name somebody else wrote down, in OUR spelling of it. On Forever's live servers one guild
+-- spans several of the server's internal realms (CAMWOWEU4Realm4PvP, CAMWOWEU4Realm8PvP,
+-- CAMWOWEU5Realm2PvP...), and the client hands every guildie to us WITHOUT a realm: the sender of
+-- an addon message is "Kriger Skaalvik", and so is the roster entry. We file them under our own
+-- realm. But the name a player writes for HIMSELF carries his own home realm, so the profile he
+-- sends says "Kriger Skaalvik-CAMWOWEU4Realm8PvP" while everything on our side knows him as
+-- "Kriger Skaalvik-CAMWOWEU4Realm4PvP". Seen in game 2026-11-06: every such profile failed the
+-- roster check and the whole guild read "waiting for what they share".
+-- So a name from the wire whose realm is not ours becomes ours - but only when that spelling is
+-- one we actually know (a guildie, or ourselves), and never when the name as written is known
+-- already. The client cannot tell two such names apart either: it shows them without a realm.
+function GH.LocalKey(full)
+    if type(full) ~= "string" then return full end
+    local me = GH.Me()
+    if full == me or GH.KnownGuildie(full) then return full end
+    local name = full:match("^(.-)%-[^%-]+$")
+    if not name or name == "" then return full end
+    local ours = name .. "-" .. GH.Realm()
+    if ours ~= full and (ours == me or GH.KnownGuildie(ours)) then return ours end
+    return full
+end
+
 -- No roster-only "is this a guildie" test any more: the roster can be empty or partial on Forever,
 -- and nothing may depend on it. Sync notices a refused message and retries instead of asking the
 -- game whether chat is locked down.

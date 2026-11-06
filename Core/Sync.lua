@@ -302,6 +302,10 @@ local function StoreProfile(p, sender, fresh, takedowns)
     -- guildies already agree on - so one character does not become two records across the guild.
     -- Before the gate below, which asks the roster about a name the roster has never heard of.
     if OldSpellingOf(p.owner, sender) then p.owner = sender end
+    -- A guildie on another of the server's internal realms names himself with his own realm, and
+    -- we know him under ours (GH.LocalKey). Also before the gate, and before "is this me", since a
+    -- guildie's copy of MY profile carries their spelling of me.
+    p.owner = GH.LocalKey(p.owner)
     if p.owner == GH.Me() then
         Sync.RestoreSelf(p, sender)
         return
@@ -461,6 +465,7 @@ H.MF = function(_, body, sender)
     for line in (body .. "\n"):gmatch("(.-)\n") do
         local owner, rev = strsplit("\t", line)
         rev = tonumber(rev)
+        owner = GH.LocalKey(owner)   -- the relayer's spelling of the owner, made ours
         if owner and rev and owner ~= GH.Me() and GH.KnownGuildie(owner) and not GH.IsOnline(owner) then
             local cur = g.members[owner]
             if not cur or (cur.rev or 0) < rev then want[#want + 1] = owner end
@@ -480,7 +485,7 @@ H.RQ = function(f, _, sender)
     local served = lastServed["RQn" .. sender] or 0
     for i = 3, #f do
         if served >= 80 then break end
-        local owner = f[i]
+        local owner = GH.LocalKey(f[i])   -- the asker's spelling of the owner, made ours
         local p = owner and HeldProfile(owner)
         if p and GH.KnownGuildie(owner) then
             served = served + 1
